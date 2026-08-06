@@ -70,7 +70,7 @@
 |------|------|
 | **Workspace** | 本机目录；可含多个独立 git 仓；与 Board 1:1 |
 | **Board** | 一个 workspace 的交付看板 |
-| **Epic** | 主题聚合根：挂多张需求、设计产物 link、拆出的任务卡 |
+| **Epic** | 主题聚合根；看板上以 `type=epic` 的主题卡呈现，流经设计/拆分/校验；关联多需求、设计产物 link、任务卡 |
 | **Card** | 工作项；`type` ∈ {epic, requirement, task}（设计不以长文卡片为真相） |
 | **Employee** | AI 员工：角色、盯的列、prompt 包、adapter（MVP=cursor） |
 | **Comment** | 沟通与事件流水 |
