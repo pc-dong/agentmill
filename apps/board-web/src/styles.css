@@ -1,0 +1,38 @@
+:root {
+  font-family: "IBM Plex Sans", "Noto Sans SC", system-ui, sans-serif;
+  color: #1c1917;
+  background: #f5f5f4;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+.app { padding: 16px; }
+.board {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(180px, 1fr));
+  gap: 8px;
+  overflow-x: auto;
+}
+.column {
+  background: #e7e5e4;
+  border-radius: 8px;
+  padding: 8px;
+  min-height: 70vh;
+}
+.column h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+.card {
+  background: #fff;
+  border: 1px solid #d6d3d1;
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.card.frozen { outline: 2px solid #b91c1c; }
+.meta { color: #78716c; font-size: 12px; }
+.drawer {
+  position: fixed; right: 0; top: 0; width: 380px; height: 100%;
+  background: #fff; border-left: 1px solid #d6d3d1; padding: 16px;
+  overflow: auto;
+}
