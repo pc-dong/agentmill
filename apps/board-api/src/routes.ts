@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   applyHumanDecision,
   applyTestFailure,
+  isColumnAllowedForType,
   planMove,
   type ColumnId,
   type CardType,
@@ -54,6 +55,14 @@ export function createApp(repo: BoardRepo) {
         epicId: z.string().nullable().optional(),
       })
       .parse(await c.req.json());
+    if (!isColumnAllowedForType(body.type as CardType, body.column as ColumnId)) {
+      return c.json(
+        {
+          error: `Type ${body.type} cannot occupy column ${body.column}`,
+        },
+        400,
+      );
+    }
     const card = repo.createCard({
       boardId,
       type: body.type as CardType,
@@ -138,6 +147,14 @@ export function createApp(repo: BoardRepo) {
         body: `[audit] ${result.audit}`,
       });
       return c.json(updated);
+    }
+    if (card.type !== "task" || card.column !== "test") {
+      return c.json(
+        {
+          error: "test-result only valid for task cards in test column",
+        },
+        400,
+      );
     }
     const failure = applyTestFailure({
       id: card.id,

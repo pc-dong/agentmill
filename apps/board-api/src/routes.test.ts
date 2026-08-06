@@ -105,6 +105,67 @@ describe("routes", () => {
     expect(jobs.length).toBe(1);
   });
 
+  it("rejects create card with wrong column occupancy", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const res = await app.request(
+      `http://localhost/boards/${board.id}/cards`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "task",
+          title: "Bad placement",
+          column: "design",
+          description: "",
+        }),
+      },
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/cannot occupy column design/);
+  });
+
+  it("rejects test-result on wrong column or type", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "design",
+      description: "",
+    });
+    const wrongType = await app.request(
+      `http://localhost/cards/${epic.id}/test-result`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ passed: false }),
+      },
+    );
+    expect(wrongType.status).toBe(400);
+    expect((await wrongType.json()).error).toMatch(/test-result only valid/);
+
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      column: "dev",
+      description: "",
+    });
+    const wrongColumn = await app.request(
+      `http://localhost/cards/${task.id}/test-result`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ passed: false }),
+      },
+    );
+    expect(wrongColumn.status).toBe(400);
+    expect((await wrongColumn.json()).error).toMatch(/test-result only valid/);
+  });
+
   it("freezes after third test failure", async () => {
     const { app, repo } = appWithRepo();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
