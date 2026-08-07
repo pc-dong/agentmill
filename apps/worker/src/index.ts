@@ -1,12 +1,24 @@
-import { MockDriver } from "@ai-workforce/agent";
-import { loadConfig } from "./config.js";
+import { CursorDriver, MockDriver } from "@ai-workforce/agent";
+import { loadConfig, type WorkerConfig } from "./config.js";
 import { BoardClient } from "./boardClient.js";
 import { tick } from "./loop.js";
-// CursorDriver imported dynamically when driver===cursor (Task 5)
+
+function createDriver(config: WorkerConfig) {
+  if (config.driver === "cursor") {
+    if (!config.cursorApiKey) {
+      throw new Error("CURSOR_API_KEY required when AIW_DRIVER=cursor");
+    }
+    return new CursorDriver({
+      apiKey: config.cursorApiKey,
+      modelId: config.modelId,
+    });
+  }
+  return new MockDriver();
+}
 
 const config = loadConfig(process.env);
 const client = new BoardClient(config);
-const driver = new MockDriver(); // Task 5 replaces selection
+const driver = createDriver(config);
 
 async function main() {
   console.log(
