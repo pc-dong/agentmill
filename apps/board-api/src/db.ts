@@ -97,4 +97,5 @@ export function migrate(db: Database.Database): void {
   ensureColumn(db, "jobs", "error", "TEXT");
   ensureColumn(db, "jobs", "finished_at", "TEXT");
   ensureColumn(db, "jobs", "worker_id", "TEXT");
+  ensureColumn(db, "jobs", "payload", "TEXT");
 }

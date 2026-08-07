@@ -42,6 +42,7 @@ export type JobRecord = {
   employeeId: string;
   status: string;
   trigger: string;
+  payload: string | null;
   workerId: string | null;
   error: string | null;
   createdAt: string;
@@ -296,14 +297,15 @@ export class BoardRepo {
     boardId: string;
     cardId: string;
     employeeId: string;
-    trigger: "mention" | "poll";
+    trigger: "mention" | "poll" | "settle" | "deep_dive";
+    payload?: string | null;
   }): JobRecord {
     const id = randomUUID();
     const createdAt = new Date().toISOString();
     this.db
       .prepare(
-        `INSERT INTO jobs (id, board_id, card_id, employee_id, status, trigger, created_at)
-         VALUES (?, ?, ?, ?, 'open', ?, ?)`,
+        `INSERT INTO jobs (id, board_id, card_id, employee_id, status, trigger, payload, created_at)
+         VALUES (?, ?, ?, ?, 'open', ?, ?, ?)`,
       )
       .run(
         id,
@@ -311,6 +313,7 @@ export class BoardRepo {
         input.cardId,
         input.employeeId,
         input.trigger,
+        input.payload ?? null,
         createdAt,
       );
     return this.getJob(id)!;
@@ -320,7 +323,7 @@ export class BoardRepo {
     const row = this.db
       .prepare(
         `SELECT id, board_id as boardId, card_id as cardId, employee_id as employeeId,
-                status, trigger, worker_id as workerId, error,
+                status, trigger, payload, worker_id as workerId, error,
                 created_at as createdAt, claimed_at as claimedAt, finished_at as finishedAt
          FROM jobs WHERE id = ?`,
       )
@@ -332,6 +335,7 @@ export class BoardRepo {
           employeeId: string;
           status: string;
           trigger: string;
+          payload: string | null;
           workerId: string | null;
           error: string | null;
           createdAt: string;
@@ -347,12 +351,30 @@ export class BoardRepo {
       employeeId: row.employeeId,
       status: row.status,
       trigger: row.trigger,
+      payload: row.payload ?? null,
       workerId: row.workerId ?? null,
       error: row.error ?? null,
       createdAt: row.createdAt,
       claimedAt: row.claimedAt ?? null,
       finishedAt: row.finishedAt ?? null,
     };
+  }
+
+  findEpicCardByEpicId(boardId: string, epicKey: string): CardRecord | null {
+    const epics = this.listCards(boardId).filter((c) => c.type === "epic");
+    const prefix = `epic_id: ${epicKey}`;
+    const byDesc = epics.find(
+      (c) =>
+        c.description === prefix ||
+        c.description.startsWith(`${prefix}\n`) ||
+        c.description.startsWith(`${prefix}\r\n`),
+    );
+    if (byDesc) return byDesc;
+    const needle = `/${epicKey}-`;
+    return (
+      epics.find((c) => c.artifacts.some((a) => a.href.includes(needle))) ??
+      null
+    );
   }
 
   claimJob(jobId: string, workerId: string): JobRecord | null {

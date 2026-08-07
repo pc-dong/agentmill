@@ -375,5 +375,145 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     return c.json({ session: closed, card: repo.getCard(card.id) });
   });
 
+  app.post("/cards/:cardId/ba-settle", async (c) => {
+    const card = repo.getCard(c.req.param("cardId"));
+    if (!card || card.type !== "requirement") {
+      return c.json({ error: "not found" }, 404);
+    }
+
+    const body = z
+      .object({
+        mode: z.enum(["create", "link"]),
+        epicKey: z.string().min(1),
+        epicTitle: z.string().min(1),
+        epicSlug: z.string().min(1),
+        artifacts: z
+          .array(
+            z.object({
+              kind: z.enum(["file", "url", "pr"]),
+              href: z.string(),
+              label: z.string().optional(),
+            }),
+          )
+          .default([]),
+      })
+      .parse(await c.req.json());
+
+    let mode: "create" | "link" = body.mode;
+    let warning: string | undefined;
+    if (mode === "create" && card.epicId) {
+      mode = "link";
+      warning =
+        "requirement already linked to an epic; treating create as link";
+    }
+
+    const mergeArtifacts = (
+      existing: typeof card.artifacts,
+      incoming: typeof body.artifacts,
+    ) => {
+      const seen = new Set(existing.map((a) => a.href));
+      const merged = [...existing];
+      for (const a of incoming) {
+        if (seen.has(a.href)) continue;
+        seen.add(a.href);
+        merged.push(a);
+      }
+      return merged;
+    };
+
+    if (mode === "link") {
+      if (!card.epicId) {
+        return c.json({ error: "requirement has no epicId for link" }, 400);
+      }
+      const epic = repo.getCard(card.epicId);
+      if (!epic || epic.type !== "epic") {
+        return c.json({ error: "linked epic not found" }, 404);
+      }
+      const epicUpdated = repo.updateCard(epic.id, {
+        artifacts: mergeArtifacts(epic.artifacts, body.artifacts),
+      });
+      const reqUpdated = repo.updateCard(card.id, {
+        artifacts: mergeArtifacts(card.artifacts, body.artifacts),
+      });
+      repo.addComment({
+        cardId: card.id,
+        author: "ba",
+        body: `[audit] ba-settle link epic ${body.epicKey}`,
+      });
+      return c.json({
+        mode: "link",
+        epicKey: body.epicKey,
+        epicTitle: body.epicTitle,
+        epicSlug: body.epicSlug,
+        artifacts: body.artifacts,
+        warning,
+        requirement: reqUpdated,
+        epic: epicUpdated,
+      });
+    }
+
+    let epic = repo.findEpicCardByEpicId(card.boardId, body.epicKey);
+    if (!epic) {
+      epic = repo.createCard({
+        boardId: card.boardId,
+        type: "epic",
+        title: body.epicTitle,
+        description: `epic_id: ${body.epicKey}\n`,
+        column: "requirements",
+      });
+      epic = repo.updateCard(epic.id, {
+        artifacts: mergeArtifacts([], body.artifacts),
+      });
+    } else {
+      epic = repo.updateCard(epic.id, {
+        artifacts: mergeArtifacts(epic.artifacts, body.artifacts),
+      });
+    }
+
+    const reqUpdated = repo.updateCard(card.id, {
+      epicId: epic.id,
+      artifacts: mergeArtifacts(card.artifacts, body.artifacts),
+    });
+    repo.addComment({
+      cardId: card.id,
+      author: "ba",
+      body: `[audit] ba-settle create epic ${body.epicKey}`,
+    });
+
+    return c.json({
+      mode: "create",
+      epicKey: body.epicKey,
+      epicTitle: body.epicTitle,
+      epicSlug: body.epicSlug,
+      artifacts: body.artifacts,
+      warning,
+      requirement: reqUpdated,
+      epic,
+    });
+  });
+
+  app.post("/cards/:cardId/ba-jobs", async (c) => {
+    const card = repo.getCard(c.req.param("cardId"));
+    if (!card) return c.json({ error: "not found" }, 404);
+    const body = z
+      .object({
+        kind: z.enum(["settle", "deep_dive"]),
+        summary: z.string().min(1),
+      })
+      .parse(await c.req.json());
+
+    const ba = repo.listEmployees(card.boardId).find((e) => e.role === "ba");
+    if (!ba) return c.json({ error: "BA employee not found" }, 404);
+
+    const job = repo.createJob({
+      boardId: card.boardId,
+      cardId: card.id,
+      employeeId: ba.id,
+      trigger: body.kind,
+      payload: body.summary,
+    });
+    return c.json({ job });
+  });
+
   return app;
 }
