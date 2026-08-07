@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type Card } from "./api";
 import { BoardView } from "./BoardView";
 import { CardDrawer } from "./CardDrawer";
@@ -15,6 +15,12 @@ export function App() {
     "/tmp/ai-workforce-demo-ws",
   );
   const [title, setTitle] = useState("");
+  const [epicIdForReq, setEpicIdForReq] = useState("");
+
+  const epics = useMemo(
+    () => cards.filter((c) => c.type === "epic"),
+    [cards],
+  );
 
   const refresh = useCallback(async () => {
     if (!boardId) return;
@@ -72,6 +78,18 @@ export function App() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
+        <select
+          value={epicIdForReq}
+          onChange={(e) => setEpicIdForReq(e.target.value)}
+          title="新建需求时关联的 Epic"
+        >
+          <option value="">需求关联 Epic（可选）</option>
+          {epics.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.title}
+            </option>
+          ))}
+        </select>
         <button
           type="button"
           onClick={async () => {
@@ -79,6 +97,7 @@ export function App() {
               type: "requirement",
               title: title || "新需求",
               column: "requirements",
+              epicId: epicIdForReq || null,
             });
             setTitle("");
             await refresh();
@@ -92,13 +111,13 @@ export function App() {
             await api.createCard(boardId, {
               type: "epic",
               title: title || "新主题",
-              column: "design",
+              column: "requirements",
             });
             setTitle("");
             await refresh();
           }}
         >
-          + Epic(设计列)
+          + Epic（需求列）
         </button>
         <button
           type="button"
@@ -122,11 +141,7 @@ export function App() {
       {selected && (
         <CardDrawer
           card={selected}
-          epicTitle={
-            selected.epicId
-              ? cards.find((c) => c.id === selected.epicId)?.title
-              : undefined
-          }
+          cards={cards}
           onClose={() => setSelected(null)}
           onChanged={refresh}
         />

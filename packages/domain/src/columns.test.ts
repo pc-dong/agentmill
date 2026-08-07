@@ -23,11 +23,11 @@ describe("isColumnAllowedForType", () => {
     expect(isColumnAllowedForType("requirement", "dev")).toBe(false);
   });
 
-  it("keeps epic in design/split/verify only", () => {
+  it("allows epic in requirements plus design/split/verify", () => {
+    expect(isColumnAllowedForType("epic", "requirements")).toBe(true);
     expect(isColumnAllowedForType("epic", "design")).toBe(true);
     expect(isColumnAllowedForType("epic", "split")).toBe(true);
     expect(isColumnAllowedForType("epic", "verify")).toBe(true);
-    expect(isColumnAllowedForType("epic", "requirements")).toBe(false);
     expect(isColumnAllowedForType("epic", "dev")).toBe(false);
   });
 

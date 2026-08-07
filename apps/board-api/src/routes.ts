@@ -70,6 +70,12 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
         400,
       );
     }
+    if (body.epicId) {
+      const epic = repo.getCard(body.epicId);
+      if (!epic || epic.boardId !== boardId || epic.type !== "epic") {
+        return c.json({ error: "epicId must reference an epic on this board" }, 400);
+      }
+    }
     const card = repo.createCard({
       boardId,
       type: body.type as CardType,
@@ -79,6 +85,33 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       epicId: body.epicId,
     });
     return c.json(card, 201);
+  });
+
+  app.patch("/cards/:cardId", async (c) => {
+    const card = repo.getCard(c.req.param("cardId"));
+    if (!card) return c.json({ error: "not found" }, 404);
+    const body = z
+      .object({
+        title: z.string().min(1).optional(),
+        description: z.string().optional(),
+        epicId: z.string().nullable().optional(),
+      })
+      .parse(await c.req.json());
+    if (body.epicId) {
+      const epic = repo.getCard(body.epicId);
+      if (!epic || epic.boardId !== card.boardId || epic.type !== "epic") {
+        return c.json({ error: "epicId must reference an epic on this board" }, 400);
+      }
+    }
+    if (card.type === "epic" && body.epicId !== undefined) {
+      return c.json({ error: "epic cannot link to another epic" }, 400);
+    }
+    const updated = repo.updateCard(card.id, {
+      ...(body.title !== undefined ? { title: body.title } : {}),
+      ...(body.description !== undefined ? { description: body.description } : {}),
+      ...(body.epicId !== undefined ? { epicId: body.epicId } : {}),
+    });
+    return c.json(updated);
   });
 
   app.post("/cards/:cardId/move", async (c) => {

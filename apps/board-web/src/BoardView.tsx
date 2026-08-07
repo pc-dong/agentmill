@@ -15,6 +15,11 @@ export function BoardView(props: {
   cards: Card[];
   onOpen: (card: Card) => void;
 }) {
+  const epicTitle = (epicId: string | null) => {
+    if (!epicId) return null;
+    return props.cards.find((c) => c.id === epicId)?.title ?? null;
+  };
+
   return (
     <div className="board">
       {COLUMNS.map((col) => (
@@ -22,20 +27,24 @@ export function BoardView(props: {
           <h3>{col.label}</h3>
           {props.cards
             .filter((c) => c.column === col.id)
-            .map((c) => (
-              <button
-                key={c.id}
-                className={`card${c.frozen ? " frozen" : ""}`}
-                onClick={() => props.onOpen(c)}
-              >
-                <div className="meta">
-                  {c.type}
-                  {c.reworkCount > 0 ? ` · rework ${c.reworkCount}` : ""}
-                  {c.frozen ? " · FROZEN" : ""}
-                </div>
-                <strong>{c.title}</strong>
-              </button>
-            ))}
+            .map((c) => {
+              const linked = epicTitle(c.epicId);
+              return (
+                <button
+                  key={c.id}
+                  className={`card${c.frozen ? " frozen" : ""}${c.type === "epic" ? " epic" : ""}`}
+                  onClick={() => props.onOpen(c)}
+                >
+                  <div className="meta">
+                    {c.type}
+                    {c.reworkCount > 0 ? ` · rework ${c.reworkCount}` : ""}
+                    {c.frozen ? " · FROZEN" : ""}
+                  </div>
+                  <strong>{c.title}</strong>
+                  {linked && <div className="epic-link">→ {linked}</div>}
+                </button>
+              );
+            })}
         </section>
       ))}
     </div>

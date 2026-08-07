@@ -65,6 +65,30 @@ export const api = {
         body: JSON.stringify(body),
       }),
     ),
+  updateCard: (
+    cardId: string,
+    body: {
+      title?: string;
+      description?: string;
+      epicId?: string | null;
+    },
+  ) =>
+    json<Card>(
+      fetch(`${base}/cards/${cardId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    ),
+  listEmployees: (boardId: string) =>
+    json<
+      Array<{
+        id: string;
+        role: string;
+        displayName: string;
+        watchColumns: string[];
+      }>
+    >(fetch(`${base}/boards/${boardId}/employees`)),
   moveCard: (
     cardId: string,
     body: { to: string; actor: "human" | "bot"; humanApproved?: boolean },

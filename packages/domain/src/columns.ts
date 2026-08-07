@@ -13,7 +13,8 @@ export const COLUMN_ORDER: ColumnId[] = [
 
 const OCCUPANCY: Record<CardType, readonly ColumnId[]> = {
   requirement: ["requirements"],
-  epic: ["design", "split", "verify"],
+  // requirements = 主题组装区；进入设计后走 design→split→verify
+  epic: ["requirements", "design", "split", "verify"],
   task: ["dev", "test", "accept", "done"],
 };
 

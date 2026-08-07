@@ -30,11 +30,58 @@ body { margin: 0; }
   width: 100%;
 }
 .card.frozen { outline: 2px solid #b91c1c; }
+.card.epic { border-left: 3px solid #0f766e; }
+.epic-link { color: #0f766e; font-size: 11px; margin-top: 4px; }
 .meta { color: #78716c; font-size: 12px; }
 .drawer {
-  position: fixed; right: 0; top: 0; width: 380px; height: 100%;
+  position: fixed; right: 0; top: 0; width: 400px; height: 100%;
   background: #fff; border-left: 1px solid #d6d3d1; padding: 16px;
   overflow: auto;
+}
+.drawer .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.drawer .field input,
+.drawer .field textarea,
+.drawer .field select,
+.drawer textarea {
+  width: 100%;
+  font: inherit;
+}
+.mention-wrap { position: relative; margin: 8px 0; }
+.mention-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  margin: 0 0 4px;
+  padding: 4px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #d6d3d1;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 8%);
+  max-height: 180px;
+  overflow: auto;
+  z-index: 2;
+}
+.mention-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.mention-menu button.active,
+.mention-menu button:hover {
+  background: #e7e5e4;
 }
 .design-chat {
   margin: 12px 0;
