@@ -22,6 +22,7 @@ function wsUrl(): string {
 export function RequirementChat(props: {
   boardId: string;
   cardId: string;
+  cardTitle: string;
   epicId: string | null;
   epicTitle?: string;
   onSettled: () => void;
@@ -193,6 +194,30 @@ export function RequirementChat(props: {
     }
   }
 
+  async function deepDive() {
+    setError(null);
+    setBusy(true);
+    try {
+      const transcript = lines
+        .filter((l) => !l.streaming && l.body.trim())
+        .map((l) => `${l.role === "user" ? "user" : "ba"}: ${l.body}`)
+        .join("\n\n")
+        .trim();
+      const summary =
+        transcript || `Deep dive for: ${props.cardTitle}`;
+      await api.createBaJob(props.cardId, {
+        kind: "deep_dive",
+        summary,
+      });
+      setStatusNote("已提交深挖 Job，完成后请再点沉淀");
+      props.onSettled();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!sessionId) {
     return (
       <section className="design-chat">
@@ -200,9 +225,14 @@ export function RequirementChat(props: {
         <p className="meta">{statusLine}</p>
         {error && <p className="chat-error">{error}</p>}
         {statusNote && <p className="meta">{statusNote}</p>}
-        <button type="button" disabled={busy} onClick={startSession}>
-          开始澄清
-        </button>
+        <div className="chat-actions">
+          <button type="button" disabled={busy} onClick={startSession}>
+            开始澄清
+          </button>
+          <button type="button" disabled={busy} onClick={deepDive}>
+            在 Cursor 中深挖
+          </button>
+        </div>
       </section>
     );
   }
@@ -232,6 +262,9 @@ export function RequirementChat(props: {
       <div className="chat-actions">
         <button type="button" disabled={busy || !draft.trim()} onClick={sendMessage}>
           发送
+        </button>
+        <button type="button" disabled={busy} onClick={deepDive}>
+          在 Cursor 中深挖
         </button>
         <button type="button" disabled={busy} onClick={settle}>
           沉淀结论

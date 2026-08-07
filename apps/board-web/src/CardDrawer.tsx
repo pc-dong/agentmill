@@ -50,6 +50,7 @@ export function CardDrawer(props: {
           <RequirementChat
             boardId={props.card.boardId}
             cardId={props.card.id}
+            cardTitle={props.card.title}
             epicId={props.card.epicId}
             epicTitle={props.epicTitle}
             onSettled={props.onChanged}

@@ -52,3 +52,17 @@ Prerequisite: `pnpm dev:api` on `:8787` (shares `AIW_DATA_DIR` with worker).
 Smoke (may auto-start API when port is down): `./scripts/plan3-smoke.sh`
 
 Flow exercised: epic in `split`, requirements with `epicId`, `@Split Bot` → ≥2 tasks in `dev` and epic in `verify`, then `@Verify Bot` → coverage comment.
+
+## Plan 4 — BA clarification → Epic/PRD
+
+Requirement cards in `requirements` open a BA sidebar chat (`employeeRole=ba`). Flow:
+
+1. **澄清** — chat with BA Bot (mock or Cursor driver).
+2. **在 Cursor 中深挖** (optional) — enqueues a `deep_dive` oneshot job; after it finishes, human still clicks settle.
+3. **沉淀结论** — UI validates BA protocol lines, enqueues `settle` job; Worker writes `docs/epics/...` under the board `workspacePath`, then `POST /cards/:id/ba-settle` creates/links the Epic card.
+
+Protocol lines (in the BA reply / settle payload): `EPIC_MODE create|link`, `EPIC_ID`, `EPIC_SLUG`, `EPIC_TITLE`, `PRD_ID`, `PRD_SLUG`, `PRD_TITLE`, plus `ARTIFACT file …` paths.
+
+Smoke (may auto-start API when port is down): `./scripts/plan4-ba-smoke.sh`
+
+Exercises create (new Epic + PRD files + epic card) then link (second requirement → PRD only).
