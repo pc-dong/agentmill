@@ -56,18 +56,27 @@ export async function executeClaimedJob(
       summary: result.summary,
       artifacts,
     });
-    await applyRoleOutcome(
-      employee.role,
-      result.summary,
-      {
-        cardId: card.id,
-        cardType: card.type,
-        cardColumn: card.column,
-        epicId: card.epicId,
-        artifacts,
-      },
-      client,
-    );
+    try {
+      await applyRoleOutcome(
+        employee.role,
+        result.summary,
+        {
+          cardId: card.id,
+          cardType: card.type,
+          cardColumn: card.column,
+          epicId: card.epicId,
+          artifacts,
+        },
+        client,
+      );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      await client.postComment(
+        card.id,
+        "bot",
+        `Warning: role outcome failed after job completed: ${message}`,
+      );
+    }
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await client.failJob(job.id, message);

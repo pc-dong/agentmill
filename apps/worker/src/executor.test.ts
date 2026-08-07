@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MockDriver } from "@ai-workforce/agent";
 import type { AgentDriver } from "@ai-workforce/agent";
 import { executeClaimedJob } from "./executor.js";
+import * as outcomes from "./outcomes.js";
 
 function fakeClient(overrides: {
   completeJob?: ReturnType<typeof vi.fn>;
@@ -112,5 +113,28 @@ describe("executeClaimedJob", () => {
     expect(completeJob).toHaveBeenCalledOnce();
     expect(createCard).toHaveBeenCalledOnce();
     expect(moveCard).toHaveBeenCalledWith("epic1", "verify", "bot");
+  });
+
+  it("does not failJob when applyRoleOutcome throws after completeJob", async () => {
+    const completeJob = vi.fn(async () => {});
+    const failJob = vi.fn(async () => {});
+    const postComment = vi.fn(async () => {});
+    vi.spyOn(outcomes, "applyRoleOutcome").mockRejectedValueOnce(
+      new Error("outcome boom"),
+    );
+
+    await executeClaimedJob(
+      fakeClient({ completeJob, failJob, postComment }) as never,
+      new MockDriver(),
+      job,
+    );
+
+    expect(completeJob).toHaveBeenCalledOnce();
+    expect(failJob).not.toHaveBeenCalled();
+    expect(postComment).toHaveBeenCalledWith(
+      "c1",
+      "bot",
+      "Warning: role outcome failed after job completed: outcome boom",
+    );
   });
 });
