@@ -60,6 +60,7 @@ const DEFAULT_EMPLOYEES: Array<{
   { role: "dev", displayName: "Dev Bot", watchColumns: ["dev"] },
   { role: "test", displayName: "Test Bot", watchColumns: ["test"] },
   { role: "review", displayName: "Review Bot", watchColumns: ["accept"] },
+  { role: "ba", displayName: "BA Bot", watchColumns: ["requirements"] },
 ];
 
 export class BoardRepo {

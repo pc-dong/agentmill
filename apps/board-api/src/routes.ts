@@ -12,7 +12,7 @@ import {
 import type { BoardRepo } from "./repo.js";
 import type { SessionRepo } from "./sessions.js";
 
-const mentionRe = /@(Design|Split|Verify|Dev|Test|Review)\s*Bot/i;
+const mentionRe = /@(Design|Split|Verify|Dev|Test|Review|BA)\s*Bot/i;
 
 export function createApp(repo: BoardRepo, sessions: SessionRepo) {
   const app = new Hono();

@@ -434,4 +434,12 @@ describe("BoardRepo", () => {
     expect(claimable.map((j) => j.id)).toEqual([freeJob.id]);
     expect(claimable.some((j) => j.id === sessionJob.id)).toBe(false);
   });
+
+  it("seeds BA Bot watching requirements", () => {
+    const { repo } = tempDb();
+    const board = repo.createBoard({ name: "b", workspacePath: "/tmp/x" });
+    const ba = repo.listEmployees(board.id).find((e) => e.role === "ba");
+    expect(ba?.displayName).toBe("BA Bot");
+    expect(ba?.watchColumns).toEqual(["requirements"]);
+  });
 });
