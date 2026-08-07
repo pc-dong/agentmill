@@ -366,11 +366,12 @@ export class BoardRepo {
       const card = this.getCard(job.card_id);
       if (!card || card.frozen || card.lockedJobId) return null;
       const now = new Date().toISOString();
-      this.db
+      const updateResult = this.db
         .prepare(
           `UPDATE jobs SET status='claimed', claimed_at=?, worker_id=? WHERE id=? AND status='open'`,
         )
         .run(now, workerId, jobId);
+      if (updateResult.changes !== 1) return null;
       this.db
         .prepare(
           `UPDATE cards SET locked_job_id=?, locked_at=?, updated_at=? WHERE id=?`,

@@ -111,6 +111,142 @@ describe("BoardRepo", () => {
     expect(repo.claimJob(job.id, "worker-2")).toBeNull();
   });
 
+  it("claimJob returns null when card is frozen", () => {
+    const repo = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "design",
+      description: "",
+    });
+    repo.updateCard(epic.id, { frozen: true });
+    const emp = repo.listEmployees(board.id).find((e) => e.role === "design")!;
+    const job = repo.createJob({
+      boardId: board.id,
+      cardId: epic.id,
+      employeeId: emp.id,
+      trigger: "mention",
+    });
+    expect(repo.claimJob(job.id, "worker-1")).toBeNull();
+    expect(repo.getCard(epic.id)?.lockedJobId).toBeNull();
+    expect(repo.getJob(job.id)?.status).toBe("open");
+  });
+
+  it("failJob unlocks card, keeps column, adds comment, sets status failed", () => {
+    const repo = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "design",
+      description: "",
+    });
+    const emp = repo.listEmployees(board.id).find((e) => e.role === "design")!;
+    const job = repo.createJob({
+      boardId: board.id,
+      cardId: epic.id,
+      employeeId: emp.id,
+      trigger: "mention",
+    });
+    repo.claimJob(job.id, "worker-1");
+    const failed = repo.failJob(job.id, "something broke");
+    expect(failed?.status).toBe("failed");
+    expect(failed?.error).toBe("something broke");
+    const card = repo.getCard(epic.id)!;
+    expect(card.column).toBe("design");
+    expect(card.lockedJobId).toBeNull();
+    expect(
+      repo.listComments(epic.id).some((c) => c.body === "something broke"),
+    ).toBe(true);
+  });
+
+  it("createPollJobs skips frozen, locked, and busy cards; creates for idle watch-column card", () => {
+    const repo = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const designEmp = repo
+      .listEmployees(board.id)
+      .find((e) => e.role === "design")!;
+
+    const frozen = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Frozen",
+      column: "design",
+      description: "",
+    });
+    repo.updateCard(frozen.id, { frozen: true });
+
+    const locked = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "Locked",
+      column: "design",
+      description: "",
+      epicId: frozen.id,
+    });
+    const lockJob = repo.createJob({
+      boardId: board.id,
+      cardId: locked.id,
+      employeeId: designEmp.id,
+      trigger: "mention",
+    });
+    repo.claimJob(lockJob.id, "worker-1");
+
+    const openBusy = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "Open busy",
+      column: "design",
+      description: "",
+      epicId: frozen.id,
+    });
+    repo.createJob({
+      boardId: board.id,
+      cardId: openBusy.id,
+      employeeId: designEmp.id,
+      trigger: "mention",
+    });
+
+    const claimedBusy = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "Claimed busy",
+      column: "design",
+      description: "",
+      epicId: frozen.id,
+    });
+    const claimedJob = repo.createJob({
+      boardId: board.id,
+      cardId: claimedBusy.id,
+      employeeId: designEmp.id,
+      trigger: "mention",
+    });
+    repo.claimJob(claimedJob.id, "worker-2");
+
+    const idle = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "Idle",
+      column: "design",
+      description: "",
+      epicId: frozen.id,
+    });
+
+    const created = repo.createPollJobs(board.id);
+    expect(created).toBe(1);
+
+    const idleJob = repo
+      .listOpenJobs(board.id)
+      .find((j) => (j as { cardId: string }).cardId === idle.id) as
+      | { cardId: string; employeeId: string; trigger: string }
+      | undefined;
+    expect(idleJob?.employeeId).toBe(designEmp.id);
+    expect(idleJob?.trigger).toBe("poll");
+  });
+
   it("completeJob writes artifacts and unlocks", () => {
     const repo = tempDb();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
