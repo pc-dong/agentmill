@@ -10,7 +10,6 @@
     "test": "echo 'no unit tests in plan1 ui'"
   },
   "dependencies": {
-    "@ai-workforce/agent": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

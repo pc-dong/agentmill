@@ -1,4 +1,4 @@
-import { parseBaSettle } from "@ai-workforce/agent";
+import { parseBaSettle } from "./parseBaSettle";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 
