@@ -38,6 +38,14 @@ export type Employee = {
   adapter: string;
 };
 
+export type SessionMessage = {
+  id: string;
+  sessionId: string;
+  role: "user" | "assistant" | "system";
+  body: string;
+  createdAt: string;
+};
+
 export type BoardClientOptions = {
   apiBase: string;
   boardId: string;
@@ -111,6 +119,10 @@ export class BoardClient {
 
   async createPollJobs(): Promise<{ created: number }> {
     return this.postJson(`/boards/${this.opts.boardId}/poll-jobs`, {});
+  }
+
+  async listSessionMessages(sessionId: string): Promise<SessionMessage[]> {
+    return this.getJson<SessionMessage[]>(`/sessions/${sessionId}/messages`);
   }
 
   private async getJson<T>(path: string): Promise<T> {

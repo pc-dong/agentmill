@@ -9,10 +9,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ai-workforce/agent": "workspace:*"
+    "@ai-workforce/agent": "workspace:*",
+    "ws": "^8.18.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.4",
+    "@types/ws": "^8.5.14",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"

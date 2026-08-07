@@ -148,6 +148,21 @@ describe("BoardClient", () => {
     });
   });
 
+  it("listSessionMessages GETs /sessions/:sessionId/messages", async () => {
+    const messages = [
+      { id: "m1", sessionId: "s1", role: "user", body: "hi", createdAt: "t" },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(url).toBe(`${API}/sessions/s1/messages`);
+        return new Response(JSON.stringify(messages), { status: 200 });
+      }),
+    );
+
+    await expect(client().listSessionMessages("s1")).resolves.toEqual(messages);
+  });
+
   it("createPollJobs POSTs poll-jobs endpoint", async () => {
     vi.stubGlobal(
       "fetch",
