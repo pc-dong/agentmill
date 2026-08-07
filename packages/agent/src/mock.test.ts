@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { parseArtifactHints } from "./parse.js";
 import { parseOutcome } from "./parseOutcome.js";
 import { MockDriver } from "./mock.js";
+import type { AgentEvent } from "./types.js";
+
+async function collectEvents(
+  stream: AsyncIterable<AgentEvent>,
+): Promise<AgentEvent[]> {
+  const events: AgentEvent[] = [];
+  for await (const event of stream) {
+    events.push(event);
+  }
+  return events;
+}
 
 describe("MockDriver", () => {
   it("returns canned summary and parsed artifacts", async () => {
@@ -45,5 +57,33 @@ describe("MockDriver", () => {
       boardId: "b1",
     });
     expect(parseOutcome(test.summary).test).toBe("pass");
+  });
+
+  it("chatStream yields text_delta chunks then done with artifact", async () => {
+    const d = new MockDriver();
+    const events = await collectEvents(
+      d.chatStream({
+        workspacePath: "/tmp/ws",
+        role: "design",
+        cardId: "c1",
+        boardId: "b1",
+        history: [{ role: "user", content: "hi" }],
+        message: "tell me more",
+      }),
+    );
+
+    expect(events.filter((e) => e.type === "text_delta").length).toBeGreaterThan(
+      0,
+    );
+    const done = events.find((e) => e.type === "done");
+    expect(done).toBeDefined();
+    expect(done?.type === "done" && done.summary).toContain(
+      "ARTIFACT file docs/aiw/chat-mock.md",
+    );
+    expect(
+      parseArtifactHints(
+        done?.type === "done" ? done.summary : "",
+      ).some((a) => a.href === "docs/aiw/chat-mock.md"),
+    ).toBe(true);
   });
 });

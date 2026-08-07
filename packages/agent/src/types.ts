@@ -18,6 +18,15 @@ export type RunInput = {
   boardId: string;
 };
 
+export type ChatInput = {
+  workspacePath: string;
+  role: string;
+  cardId: string;
+  boardId: string;
+  history: Array<{ role: "user" | "assistant"; content: string }>;
+  message: string;
+};
+
 export type RunResult = {
   status: "ok" | "error";
   summary: string;
@@ -28,4 +37,5 @@ export interface AgentDriver {
   readonly id: string;
   readonly displayName: string;
   oneshot(input: RunInput): Promise<RunResult>;
+  chatStream(input: ChatInput): AsyncIterable<AgentEvent>;
 }

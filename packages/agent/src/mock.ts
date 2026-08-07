@@ -1,5 +1,5 @@
 import { parseArtifactHints } from "./parse.js";
-import type { AgentDriver, RunInput, RunResult } from "./types.js";
+import type { AgentDriver, AgentEvent, ChatInput, RunInput, RunResult } from "./types.js";
 
 export class MockDriver implements AgentDriver {
   readonly id = "mock";
@@ -44,5 +44,18 @@ export class MockDriver implements AgentDriver {
       summary,
       artifacts: parseArtifactHints(summary),
     };
+  }
+
+  async *chatStream(input: ChatInput): AsyncIterable<AgentEvent> {
+    const chunks = ["Mock ", "chat ", "for ", `card ${input.cardId}.`];
+    for (const text of chunks) {
+      yield { type: "text_delta", text };
+    }
+
+    const summary = [
+      `Mock chat completed for card ${input.cardId}.`,
+      "ARTIFACT file docs/aiw/chat-mock.md Mock chat",
+    ].join("\n");
+    yield { type: "done", summary };
   }
 }
