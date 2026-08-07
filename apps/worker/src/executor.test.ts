@@ -6,14 +6,21 @@ import { executeClaimedJob } from "./executor.js";
 function fakeClient(overrides: {
   completeJob?: ReturnType<typeof vi.fn>;
   failJob?: ReturnType<typeof vi.fn>;
+  listCards?: ReturnType<typeof vi.fn>;
+  moveCard?: ReturnType<typeof vi.fn>;
+  createCard?: ReturnType<typeof vi.fn>;
+  postComment?: ReturnType<typeof vi.fn>;
+  postTestResult?: ReturnType<typeof vi.fn>;
 } = {}) {
   return {
     getBoard: async () => ({ workspacePath: "/tmp/ws" }),
     getCard: async () => ({
       id: "c1",
+      type: "epic",
       title: "T",
       description: "D",
       column: "design",
+      epicId: null,
       frozen: false,
       artifacts: [],
     }),
@@ -22,6 +29,11 @@ function fakeClient(overrides: {
       role: "design",
       displayName: "Design Bot",
     }),
+    listCards: overrides.listCards ?? vi.fn(async () => []),
+    moveCard: overrides.moveCard ?? vi.fn(async () => ({})),
+    createCard: overrides.createCard ?? vi.fn(async () => ({})),
+    postComment: overrides.postComment ?? vi.fn(async () => {}),
+    postTestResult: overrides.postTestResult ?? vi.fn(async () => {}),
     completeJob: overrides.completeJob ?? vi.fn(async () => {}),
     failJob: overrides.failJob ?? vi.fn(async () => {}),
   };
@@ -59,5 +71,46 @@ describe("executeClaimedJob", () => {
     await executeClaimedJob(fakeClient({ failJob }) as never, driver, job);
     expect(failJob).toHaveBeenCalledOnce();
     expect(failJob).toHaveBeenCalledWith("j1", "agent failed");
+  });
+
+  it("calls applyRoleOutcome after completeJob for split role", async () => {
+    const createCard = vi.fn(async () => ({}));
+    const moveCard = vi.fn(async () => ({}));
+    const completeJob = vi.fn(async () => {});
+    const client = fakeClient({ createCard, moveCard, completeJob });
+    client.getCard = async () => ({
+      id: "epic1",
+      type: "epic",
+      title: "Epic",
+      description: "",
+      column: "split",
+      epicId: null,
+      frozen: false,
+      artifacts: [],
+    });
+    client.getEmployee = async () => ({
+      id: "e-split",
+      role: "split",
+      displayName: "Split Bot",
+    });
+    client.listCards = async () => [
+      { id: "r1", type: "requirement", epicId: "epic1", title: "Req A" },
+    ];
+
+    const driver: AgentDriver = {
+      id: "split",
+      displayName: "Split",
+      oneshot: async () => ({
+        status: "ok",
+        summary: "TASK A | do a\nARTIFACT file x.md X",
+        artifacts: [{ kind: "file", href: "x.md", label: "X" }],
+      }),
+      chatStream: async function* () {},
+    };
+
+    await executeClaimedJob(client as never, driver, job);
+    expect(completeJob).toHaveBeenCalledOnce();
+    expect(createCard).toHaveBeenCalledOnce();
+    expect(moveCard).toHaveBeenCalledWith("epic1", "verify", "bot");
   });
 });

@@ -95,15 +95,60 @@ export class BoardClient {
     return { workspacePath: board.workspacePath };
   }
 
+  async listCards(): Promise<Card[]> {
+    return this.getJson<Card[]>(`/boards/${this.opts.boardId}/cards`);
+  }
+
   async getCard(cardId: string): Promise<Card> {
-    const cards = await this.getJson<Card[]>(
-      `/boards/${this.opts.boardId}/cards`,
-    );
+    const cards = await this.listCards();
     const card = cards.find((c) => c.id === cardId);
     if (!card) {
       throw new Error(`Card not found: ${cardId}`);
     }
     return card;
+  }
+
+  async createCard(input: {
+    type: "epic" | "requirement" | "task";
+    title: string;
+    description?: string;
+    column: string;
+    epicId?: string | null;
+  }): Promise<Card> {
+    return this.postJson<Card>(`/boards/${this.opts.boardId}/cards`, {
+      description: "",
+      epicId: null,
+      ...input,
+    });
+  }
+
+  async moveCard(
+    cardId: string,
+    to: string,
+    actor: "bot" | "human",
+  ): Promise<Card> {
+    const res = await fetch(`${this.opts.apiBase}/cards/${cardId}/move`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ to, actor }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `move failed: ${res.status}`);
+    }
+    return (await res.json()) as Card;
+  }
+
+  async postTestResult(cardId: string, passed: boolean): Promise<Card> {
+    return this.postJson<Card>(`/cards/${cardId}/test-result`, { passed });
+  }
+
+  async postComment(
+    cardId: string,
+    author: string,
+    body: string,
+  ): Promise<void> {
+    await this.postJson(`/cards/${cardId}/comments`, { author, body });
   }
 
   async getEmployee(employeeId: string): Promise<Employee> {
