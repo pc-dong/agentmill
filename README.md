@@ -34,7 +34,7 @@ pnpm dev:worker
 
 Poll creates one job per (card, employee) pair. It does not re-queue cards that already have any job for that employee (open, claimed, done, or failed). Use `@Design Bot` (or other role bots) in a comment to re-run work on a card.
 
-Smoke (API must be running, or script starts one with `AIW_DATA_DIR`): `./scripts/plan2-smoke.sh`
+Smoke (requires API already running on `:8787`; does not auto-start): `./scripts/plan2-smoke.sh`
 
 ## Plan 3 — Chat + role outcomes
 
@@ -49,6 +49,6 @@ pnpm dev:worker                 # poll + WS session loop
 
 Prerequisite: `pnpm dev:api` on `:8787` (shares `AIW_DATA_DIR` with worker).
 
-Smoke (auto-starts API when port is down): `./scripts/plan3-smoke.sh`
+Smoke (may auto-start API when port is down): `./scripts/plan3-smoke.sh`
 
 Flow exercised: epic in `split`, requirements with `epicId`, `@Split Bot` → ≥2 tasks in `dev` and epic in `verify`, then `@Verify Bot` → coverage comment.
