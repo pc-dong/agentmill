@@ -38,6 +38,14 @@ export async function applyRoleOutcome(
       return;
 
     case "split": {
+      if (ctx.cardType !== "epic" || ctx.cardColumn !== "split") {
+        await client.postComment(
+          ctx.cardId,
+          "bot",
+          "Warning: split outcomes require epic in split column",
+        );
+        return;
+      }
       for (const task of outcome.tasks) {
         await client.createCard({
           type: "task",
@@ -64,8 +72,21 @@ export async function applyRoleOutcome(
       if (outcome.verify === "pass") {
         await client.postComment(ctx.cardId, "bot", "coverage ok");
       } else if (outcome.verify === "fail") {
-        await client.moveCard(ctx.cardId, "split", "bot");
-        await client.postComment(ctx.cardId, "bot", "VERIFY fail — returned to split");
+        try {
+          await client.moveCard(ctx.cardId, "split", "bot");
+          await client.postComment(
+            ctx.cardId,
+            "bot",
+            "VERIFY fail — returned to split",
+          );
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          await client.postComment(
+            ctx.cardId,
+            "bot",
+            `Failed to move epic to split: ${message}`,
+          );
+        }
       } else {
         await client.postComment(
           ctx.cardId,
@@ -79,7 +100,16 @@ export async function applyRoleOutcome(
     case "dev": {
       const hasPr = ctx.artifacts.some((a) => a.kind === "pr");
       if (hasPr || summary.trim().length > 0) {
-        await client.moveCard(ctx.cardId, "test", "bot");
+        try {
+          await client.moveCard(ctx.cardId, "test", "bot");
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          await client.postComment(
+            ctx.cardId,
+            "bot",
+            `Failed to move task to test: ${message}`,
+          );
+        }
       }
       return;
     }

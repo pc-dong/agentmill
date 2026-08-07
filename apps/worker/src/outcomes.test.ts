@@ -82,6 +82,23 @@ describe("applyRoleOutcome", () => {
         expect.stringMatching(/move epic to verify/i),
       );
     });
+
+    it("skips task creation and move when epic not in split column", async () => {
+      const client = fakeClient();
+      await applyRoleOutcome(
+        "split",
+        "TASK A | a",
+        { ...epicCtx, cardColumn: "verify" },
+        client,
+      );
+      expect(client.createCard).not.toHaveBeenCalled();
+      expect(client.moveCard).not.toHaveBeenCalled();
+      expect(client.postComment).toHaveBeenCalledWith(
+        "epic1",
+        "bot",
+        expect.stringMatching(/epic in split column/i),
+      );
+    });
   });
 
   describe("verify", () => {
@@ -138,6 +155,13 @@ describe("applyRoleOutcome", () => {
       const client = fakeClient();
       await applyRoleOutcome("dev", "implementation complete", taskCtx, client);
       expect(client.moveCard).toHaveBeenCalledWith("task1", "test", "bot");
+    });
+
+    it("does not move when summary empty and no pr artifact", async () => {
+      const client = fakeClient();
+      await applyRoleOutcome("dev", "   ", taskCtx, client);
+      expect(client.moveCard).not.toHaveBeenCalled();
+      expect(client.postComment).not.toHaveBeenCalled();
     });
   });
 
