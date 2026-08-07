@@ -202,4 +202,56 @@ describe("routes", () => {
     expect(body.frozen).toBe(true);
     expect(body.reworkCount).toBe(3);
   });
+
+  it("claims and completes a job via HTTP", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "design",
+      description: "",
+    });
+    await app.request(`http://localhost/cards/${epic.id}/comments`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        author: "human",
+        body: "@Design Bot please draft outline",
+      }),
+    });
+    const jobs = repo.listOpenJobs(board.id);
+    expect(jobs.length).toBe(1);
+    const jobId = (jobs[0] as { id: string }).id;
+
+    const claimRes = await app.request(
+      `http://localhost/jobs/${jobId}/claim`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workerId: "worker-1" }),
+      },
+    );
+    expect(claimRes.status).toBe(200);
+    const claimed = await claimRes.json();
+    expect(claimed.status).toBe("claimed");
+    expect(repo.getCard(epic.id)?.lockedJobId).toBe(jobId);
+
+    const completeRes = await app.request(
+      `http://localhost/jobs/${jobId}/complete`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          summary: "done",
+          artifacts: [{ kind: "file", href: "docs/a.md", label: "A" }],
+        }),
+      },
+    );
+    expect(completeRes.status).toBe(200);
+    const card = repo.getCard(epic.id)!;
+    expect(card.lockedJobId).toBeNull();
+    expect(card.artifacts[0]?.href).toBe("docs/a.md");
+  });
 });

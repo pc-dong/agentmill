@@ -250,5 +250,59 @@ export function createApp(repo: BoardRepo) {
     return c.json(repo.listOpenJobs(c.req.param("boardId")));
   });
 
+  app.get("/boards/:boardId/jobs/claimable", (c) => {
+    const boardId = c.req.param("boardId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    return c.json(repo.listClaimableJobs(boardId));
+  });
+
+  app.post("/boards/:boardId/poll-jobs", async (c) => {
+    const boardId = c.req.param("boardId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    if (c.req.header("content-type")?.includes("application/json")) {
+      await c.req.json().catch(() => undefined);
+    }
+    const created = repo.createPollJobs(boardId);
+    return c.json({ created });
+  });
+
+  app.post("/jobs/:jobId/claim", async (c) => {
+    const body = z
+      .object({ workerId: z.string().min(1) })
+      .parse(await c.req.json());
+    const job = repo.claimJob(c.req.param("jobId"), body.workerId);
+    if (!job) return c.json({ error: "cannot claim" }, 409);
+    return c.json(job);
+  });
+
+  app.post("/jobs/:jobId/complete", async (c) => {
+    const body = z
+      .object({
+        summary: z.string().min(1),
+        artifacts: z
+          .array(
+            z.object({
+              kind: z.string(),
+              href: z.string(),
+              label: z.string(),
+            }),
+          )
+          .default([]),
+      })
+      .parse(await c.req.json());
+    const job = repo.completeJob(c.req.param("jobId"), body);
+    if (!job) return c.json({ error: "cannot complete" }, 409);
+    return c.json(job);
+  });
+
+  app.post("/jobs/:jobId/fail", async (c) => {
+    const body = z
+      .object({ message: z.string().min(1) })
+      .parse(await c.req.json());
+    const job = repo.failJob(c.req.param("jobId"), body.message);
+    if (!job) return c.json({ error: "cannot fail" }, 409);
+    return c.json(job);
+  });
+
   return app;
 }

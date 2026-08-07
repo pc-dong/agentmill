@@ -87,4 +87,57 @@ describe("BoardRepo", () => {
     const updated = repo.getCard(epic.id);
     expect(updated?.artifacts[0]?.href).toBe("docs/design/auth.md");
   });
+
+  it("claims a job and locks the card; second claim fails", () => {
+    const repo = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "design",
+      description: "",
+    });
+    const emp = repo.listEmployees(board.id).find((e) => e.role === "design")!;
+    const job = repo.createJob({
+      boardId: board.id,
+      cardId: epic.id,
+      employeeId: emp.id,
+      trigger: "mention",
+    });
+    const claimed = repo.claimJob(job.id, "worker-1");
+    expect(claimed?.status).toBe("claimed");
+    expect(repo.getCard(epic.id)?.lockedJobId).toBe(job.id);
+    expect(repo.claimJob(job.id, "worker-2")).toBeNull();
+  });
+
+  it("completeJob writes artifacts and unlocks", () => {
+    const repo = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "design",
+      description: "",
+    });
+    const emp = repo.listEmployees(board.id).find((e) => e.role === "design")!;
+    const job = repo.createJob({
+      boardId: board.id,
+      cardId: epic.id,
+      employeeId: emp.id,
+      trigger: "mention",
+    });
+    repo.claimJob(job.id, "worker-1");
+    repo.completeJob(job.id, {
+      summary: "done",
+      artifacts: [{ kind: "file", href: "docs/a.md", label: "A" }],
+    });
+    const card = repo.getCard(epic.id)!;
+    expect(card.lockedJobId).toBeNull();
+    expect(card.artifacts[0]?.href).toBe("docs/a.md");
+    expect(repo.listComments(epic.id).some((c) => c.body.includes("done"))).toBe(
+      true,
+    );
+  });
 });

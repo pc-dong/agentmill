@@ -1,5 +1,19 @@
 import Database from "better-sqlite3";
 
+function ensureColumn(
+  db: Database.Database,
+  table: string,
+  column: string,
+  decl: string,
+): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+    name: string;
+  }>;
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+  }
+}
+
 export function openDb(filePath: string): Database.Database {
   const db = new Database(filePath);
   db.pragma("journal_mode = WAL");
@@ -59,4 +73,10 @@ export function migrate(db: Database.Database): void {
       claimed_at TEXT
     );
   `);
+
+  ensureColumn(db, "cards", "locked_job_id", "TEXT");
+  ensureColumn(db, "cards", "locked_at", "TEXT");
+  ensureColumn(db, "jobs", "error", "TEXT");
+  ensureColumn(db, "jobs", "finished_at", "TEXT");
+  ensureColumn(db, "jobs", "worker_id", "TEXT");
 }
