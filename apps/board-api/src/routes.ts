@@ -10,10 +10,11 @@ import {
   type HumanDecision,
 } from "@ai-workforce/domain";
 import type { BoardRepo } from "./repo.js";
+import type { SessionRepo } from "./sessions.js";
 
 const mentionRe = /@(Design|Split|Verify|Dev|Test|Review)\s*Bot/i;
 
-export function createApp(repo: BoardRepo) {
+export function createApp(repo: BoardRepo, sessions: SessionRepo) {
   const app = new Hono();
 
   app.post("/boards", async (c) => {
@@ -282,9 +283,9 @@ export function createApp(repo: BoardRepo) {
         artifacts: z
           .array(
             z.object({
-              kind: z.string(),
+              kind: z.enum(["file", "url", "pr"]),
               href: z.string(),
-              label: z.string(),
+              label: z.string().optional(),
             }),
           )
           .default([]),
@@ -302,6 +303,76 @@ export function createApp(repo: BoardRepo) {
     const job = repo.failJob(c.req.param("jobId"), body.message);
     if (!job) return c.json({ error: "cannot fail" }, 409);
     return c.json(job);
+  });
+
+  app.post("/boards/:boardId/cards/:cardId/sessions", (c) => {
+    const boardId = c.req.param("boardId");
+    const cardId = c.req.param("cardId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    const card = repo.getCard(cardId);
+    if (!card || card.boardId !== boardId) {
+      return c.json({ error: "not found" }, 404);
+    }
+    if (sessions.getOpenSessionForCard(cardId)) {
+      return c.json({ error: "open session exists" }, 409);
+    }
+    const session = sessions.createSession({ boardId, cardId });
+    return c.json({ id: session.id }, 201);
+  });
+
+  app.get("/sessions/:sessionId/messages", (c) => {
+    const session = sessions.getSession(c.req.param("sessionId"));
+    if (!session) return c.json({ error: "not found" }, 404);
+    return c.json(sessions.listMessages(session.id));
+  });
+
+  app.post("/sessions/:sessionId/close", (c) => {
+    const closed = sessions.closeSession(c.req.param("sessionId"));
+    if (!closed) return c.json({ error: "cannot close" }, 409);
+    return c.json(closed);
+  });
+
+  app.post("/sessions/:sessionId/settle", async (c) => {
+    const sessionId = c.req.param("sessionId");
+    const session = sessions.getSession(sessionId);
+    if (!session) return c.json({ error: "not found" }, 404);
+    if (session.status !== "open") {
+      return c.json({ error: "session not open" }, 409);
+    }
+
+    const body = z
+      .object({
+        artifacts: z
+          .array(
+            z.object({
+              kind: z.enum(["file", "url", "pr"]),
+              href: z.string(),
+              label: z.string().optional(),
+            }),
+          )
+          .optional(),
+        comment: z.string().optional(),
+      })
+      .parse(await c.req.json().catch(() => ({})));
+
+    const card = repo.getCard(session.cardId);
+    if (!card) return c.json({ error: "not found" }, 404);
+
+    if (body.artifacts?.length) {
+      repo.updateCard(card.id, {
+        artifacts: [...card.artifacts, ...body.artifacts],
+      });
+    }
+    if (body.comment) {
+      repo.addComment({
+        cardId: card.id,
+        author: "human",
+        body: body.comment,
+      });
+    }
+
+    const closed = sessions.closeSession(sessionId);
+    return c.json({ session: closed, card: repo.getCard(card.id) });
   });
 
   return app;

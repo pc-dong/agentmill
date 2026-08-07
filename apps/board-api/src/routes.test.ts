@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createApp } from "./routes.js";
 import { migrate, openDb } from "./db.js";
 import { BoardRepo } from "./repo.js";
+import { SessionRepo } from "./sessions.js";
 
 const tmpFiles: string[] = [];
 
@@ -25,7 +26,8 @@ function appWithRepo() {
   const db = openDb(file);
   migrate(db);
   const repo = new BoardRepo(db);
-  return { app: createApp(repo), repo };
+  const sessions = new SessionRepo(db);
+  return { app: createApp(repo, sessions), repo, sessions };
 }
 
 describe("routes", () => {

@@ -119,7 +119,7 @@ export class SessionRepo {
     return rows.map((r) => r.cardId);
   }
 
-  private getSession(id: string): SessionRecord | null {
+  getSession(id: string): SessionRecord | null {
     const row = this.db
       .prepare(
         `SELECT id, board_id as boardId, card_id as cardId,
