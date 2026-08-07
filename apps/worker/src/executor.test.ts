@@ -36,7 +36,7 @@ const job = {
 
 describe("executeClaimedJob", () => {
   it("completes with artifacts from mock driver", async () => {
-    const completeJob = vi.fn(async () => {});
+    const completeJob = vi.fn(async (_jobId: string, _body: { artifacts: unknown[] }) => {});
     const client = fakeClient({ completeJob });
     await executeClaimedJob(client as never, new MockDriver(), job);
     expect(completeJob).toHaveBeenCalledOnce();
@@ -54,6 +54,7 @@ describe("executeClaimedJob", () => {
         summary: "agent failed",
         artifacts: [],
       }),
+      chatStream: async function* () {},
     };
     await executeClaimedJob(fakeClient({ failJob }) as never, driver, job);
     expect(failJob).toHaveBeenCalledOnce();

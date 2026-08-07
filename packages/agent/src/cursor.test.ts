@@ -156,4 +156,21 @@ describe("CursorDriver", () => {
     );
     expect(events).toEqual([{ type: "error", message: "create failed" }]);
   });
+
+  it("chatStream yields error when send throws", async () => {
+    mockSend.mockRejectedValueOnce(new Error("send failed"));
+    const d = new CursorDriver({ apiKey: "k", modelId: "m" });
+    const events = await collectEvents(
+      d.chatStream({
+        workspacePath: "/tmp",
+        role: "design",
+        cardId: "c1",
+        boardId: "b1",
+        history: [],
+        message: "hello",
+      }),
+    );
+    expect(events).toEqual([{ type: "error", message: "send failed" }]);
+    expect(mockAsyncDispose).toHaveBeenCalled();
+  });
 });
