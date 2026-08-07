@@ -72,6 +72,24 @@ export function migrate(db: Database.Database): void {
       created_at TEXT NOT NULL,
       claimed_at TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      board_id TEXT NOT NULL,
+      card_id TEXT NOT NULL,
+      employee_role TEXT NOT NULL DEFAULT 'design',
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS session_messages (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
   `);
 
   ensureColumn(db, "cards", "locked_job_id", "TEXT");

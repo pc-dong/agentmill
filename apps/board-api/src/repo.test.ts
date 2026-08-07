@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { migrate, openDb } from "./db.js";
 import { BoardRepo } from "./repo.js";
+import { SessionRepo } from "./sessions.js";
 
 const tmpFiles: string[] = [];
 
@@ -18,7 +19,7 @@ afterEach(() => {
   tmpFiles.length = 0;
 });
 
-function tempDb(): BoardRepo {
+function tempDb(): { repo: BoardRepo; sessions: SessionRepo } {
   const file = path.join(
     os.tmpdir(),
     `aiw-board-${Date.now()}-${Math.random().toString(16).slice(2)}.sqlite`,
@@ -26,12 +27,12 @@ function tempDb(): BoardRepo {
   tmpFiles.push(file);
   const db = openDb(file);
   migrate(db);
-  return new BoardRepo(db);
+  return { repo: new BoardRepo(db), sessions: new SessionRepo(db) };
 }
 
 describe("BoardRepo", () => {
   it("creates a board and cards, lists by column", () => {
-    const repo = tempDb();
+    const { repo } = tempDb();
     const board = repo.createBoard({
       name: "Demo",
       workspacePath: "/tmp/demo-workspace",
@@ -60,7 +61,7 @@ describe("BoardRepo", () => {
   });
 
   it("stores comments and artifact links on update", () => {
-    const repo = tempDb();
+    const { repo } = tempDb();
     const board = repo.createBoard({
       name: "Demo",
       workspacePath: "/tmp/ws",
@@ -89,7 +90,7 @@ describe("BoardRepo", () => {
   });
 
   it("claims a job and locks the card; second claim fails", () => {
-    const repo = tempDb();
+    const { repo } = tempDb();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
     const epic = repo.createCard({
       boardId: board.id,
@@ -112,7 +113,7 @@ describe("BoardRepo", () => {
   });
 
   it("claimJob returns null when card is frozen", () => {
-    const repo = tempDb();
+    const { repo } = tempDb();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
     const epic = repo.createCard({
       boardId: board.id,
@@ -135,7 +136,7 @@ describe("BoardRepo", () => {
   });
 
   it("failJob unlocks card, keeps column, adds comment, sets status failed", () => {
-    const repo = tempDb();
+    const { repo } = tempDb();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
     const epic = repo.createCard({
       boardId: board.id,
@@ -164,7 +165,7 @@ describe("BoardRepo", () => {
   });
 
   it("createPollJobs skips frozen, locked, and busy cards; creates for idle watch-column card", () => {
-    const repo = tempDb();
+    const { repo } = tempDb();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
     const designEmp = repo
       .listEmployees(board.id)
@@ -248,7 +249,7 @@ describe("BoardRepo", () => {
   });
 
   it("createPollJobs skips card+employee pairs with any prior job (done/failed)", () => {
-    const repo = tempDb();
+    const { repo } = tempDb();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
     const designEmp = repo
       .listEmployees(board.id)
@@ -292,7 +293,7 @@ describe("BoardRepo", () => {
   });
 
   it("completeJob writes artifacts and unlocks", () => {
-    const repo = tempDb();
+    const { repo } = tempDb();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
     const epic = repo.createCard({
       boardId: board.id,
@@ -319,5 +320,118 @@ describe("BoardRepo", () => {
     expect(repo.listComments(epic.id).some((c) => c.body.includes("done"))).toBe(
       true,
     );
+  });
+
+  it("claimJob returns null when card has an open chat session", () => {
+    const { repo, sessions } = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "design",
+      description: "",
+    });
+    sessions.createSession({ boardId: board.id, cardId: epic.id });
+    const emp = repo.listEmployees(board.id).find((e) => e.role === "design")!;
+    const job = repo.createJob({
+      boardId: board.id,
+      cardId: epic.id,
+      employeeId: emp.id,
+      trigger: "mention",
+    });
+    expect(repo.claimJob(job.id, "worker-1")).toBeNull();
+    expect(repo.getCard(epic.id)?.lockedJobId).toBeNull();
+    expect(repo.getJob(job.id)?.status).toBe("open");
+  });
+
+  it("createPollJobs skips cards with open chat sessions", () => {
+    const { repo, sessions } = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const designEmp = repo
+      .listEmployees(board.id)
+      .find((e) => e.role === "design")!;
+
+    const sessionCard = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "In session",
+      column: "design",
+      description: "",
+    });
+    sessions.createSession({
+      boardId: board.id,
+      cardId: sessionCard.id,
+    });
+
+    const idle = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "Idle",
+      column: "design",
+      description: "",
+      epicId: sessionCard.id,
+    });
+
+    expect(repo.createPollJobs(board.id)).toBe(1);
+    const openJobs = repo.listOpenJobs(board.id);
+    expect(openJobs.some((j) => (j as { cardId: string }).cardId === sessionCard.id)).toBe(
+      false,
+    );
+    expect(openJobs.some((j) => (j as { cardId: string }).cardId === idle.id)).toBe(
+      true,
+    );
+    expect(
+      (
+        openJobs.find((j) => (j as { cardId: string }).cardId === idle.id) as
+          | { employeeId: string }
+          | undefined
+      )?.employeeId,
+    ).toBe(designEmp.id);
+  });
+
+  it("listClaimableJobs excludes jobs for cards with open chat sessions", () => {
+    const { repo, sessions } = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const designEmp = repo
+      .listEmployees(board.id)
+      .find((e) => e.role === "design")!;
+
+    const sessionCard = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "In session",
+      column: "design",
+      description: "",
+    });
+    sessions.createSession({
+      boardId: board.id,
+      cardId: sessionCard.id,
+    });
+    const sessionJob = repo.createJob({
+      boardId: board.id,
+      cardId: sessionCard.id,
+      employeeId: designEmp.id,
+      trigger: "mention",
+    });
+
+    const freeCard = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "Free",
+      column: "design",
+      description: "",
+      epicId: sessionCard.id,
+    });
+    const freeJob = repo.createJob({
+      boardId: board.id,
+      cardId: freeCard.id,
+      employeeId: designEmp.id,
+      trigger: "mention",
+    });
+
+    const claimable = repo.listClaimableJobs(board.id);
+    expect(claimable.map((j) => j.id)).toEqual([freeJob.id]);
+    expect(claimable.some((j) => j.id === sessionJob.id)).toBe(false);
   });
 });

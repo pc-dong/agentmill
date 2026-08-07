@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import type { ArtifactRef, CardType, ColumnId } from "@ai-workforce/domain";
+import { SessionRepo } from "./sessions.js";
 
 export type Board = {
   id: string;
@@ -63,6 +64,10 @@ const DEFAULT_EMPLOYEES: Array<{
 
 export class BoardRepo {
   constructor(private readonly db: Database.Database) {}
+
+  private sessionRepo(): SessionRepo {
+    return new SessionRepo(this.db);
+  }
 
   createBoard(input: { name: string; workspacePath: string }): Board {
     const id = randomUUID();
@@ -365,6 +370,7 @@ export class BoardRepo {
       if (!job || job.status !== "open") return null;
       const card = this.getCard(job.card_id);
       if (!card || card.frozen || card.lockedJobId) return null;
+      if (this.sessionRepo().getOpenSessionForCard(job.card_id)) return null;
       const now = new Date().toISOString();
       const updateResult = this.db
         .prepare(
@@ -444,6 +450,9 @@ export class BoardRepo {
   }
 
   listClaimableJobs(boardId: string): JobRecord[] {
+    const openSessionCardIds = new Set(
+      this.sessionRepo().listOpenSessionCardIds(boardId),
+    );
     const rows = this.db
       .prepare(
         `SELECT j.id FROM jobs j
@@ -454,17 +463,23 @@ export class BoardRepo {
          ORDER BY j.created_at`,
       )
       .all(boardId) as Array<{ id: string }>;
-    return rows.map((r) => this.getJob(r.id)!);
+    return rows
+      .map((r) => this.getJob(r.id)!)
+      .filter((job) => !openSessionCardIds.has(job.cardId));
   }
 
   createPollJobs(boardId: string): number {
     let created = 0;
+    const openSessionCardIds = new Set(
+      this.sessionRepo().listOpenSessionCardIds(boardId),
+    );
     const employees = this.listEmployees(boardId);
     for (const emp of employees) {
       for (const col of emp.watchColumns) {
         const cards = this.listCards(boardId).filter((c) => c.column === col);
         for (const card of cards) {
-          if (card.frozen || card.lockedJobId) continue;
+          if (card.frozen || card.lockedJobId || openSessionCardIds.has(card.id))
+            continue;
           const existing = this.db
             .prepare(
               `SELECT id FROM jobs
