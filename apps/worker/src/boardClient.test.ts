@@ -279,4 +279,26 @@ describe("BoardClient", () => {
 
     await client().postComment("c1", "bot", "hello");
   });
+
+  it("baSettle POSTs settle body to /cards/:id/ba-settle", async () => {
+    const body = {
+      mode: "create" as const,
+      epicKey: "E-DEMO-001",
+      epicTitle: "Login",
+      epicSlug: "login",
+      artifacts: [{ kind: "file", href: "docs/epics/x/EPIC.md", label: "Epic" }],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        expect(url).toBe(`${API}/cards/c1/ba-settle`);
+        expect(JSON.parse(String(init?.body))).toEqual(body);
+        return new Response(JSON.stringify({ mode: "create" }), { status: 200 });
+      }),
+    );
+
+    await expect(client().baSettle("c1", body)).resolves.toEqual({
+      mode: "create",
+    });
+  });
 });

@@ -5,6 +5,7 @@ export type Job = {
   employeeId: string;
   status: string;
   trigger: string;
+  payload: string | null;
   workerId: string | null;
   error: string | null;
   createdAt: string;
@@ -149,6 +150,20 @@ export class BoardClient {
     body: string,
   ): Promise<void> {
     await this.postJson(`/cards/${cardId}/comments`, { author, body });
+  }
+
+  async baSettle(
+    cardId: string,
+    body: {
+      mode: "create" | "link";
+      epicKey: string;
+      epicTitle: string;
+      epicSlug: string;
+      artifacts: Array<{ kind: string; href: string; label: string }>;
+      warning?: string;
+    },
+  ): Promise<unknown> {
+    return this.postJson(`/cards/${cardId}/ba-settle`, body);
   }
 
   async getEmployee(employeeId: string): Promise<Employee> {

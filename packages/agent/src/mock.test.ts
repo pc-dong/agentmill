@@ -86,4 +86,44 @@ describe("MockDriver", () => {
       ).some((a) => a.href === "docs/aiw/chat-mock.md"),
     ).toBe(true);
   });
+
+  it("oneshot ba/baDeepDive returns parseable create protocol", async () => {
+    const d = new MockDriver();
+    const ba = await d.oneshot({
+      workspacePath: "/tmp/ws",
+      prompt: "Card title: OAuth Login\nColumn: requirements\nDescription:",
+      role: "ba",
+      cardId: "c-ba",
+      boardId: "b1",
+    });
+    expect(ba.summary).toMatch(/EPIC_MODE create/);
+    expect(ba.summary).toMatch(/EPIC_SLUG oauth-login/);
+    expect(ba.artifacts.some((a) => a.href.includes("/prds/"))).toBe(true);
+
+    const dive = await d.oneshot({
+      workspacePath: "/tmp/ws",
+      prompt: "Card title: SSO\nColumn: requirements\nDescription:",
+      role: "baDeepDive",
+      cardId: "c-dive",
+      boardId: "b1",
+    });
+    expect(dive.summary).toMatch(/EPIC_MODE create/);
+  });
+
+  it("chatStream for ba ends with create protocol using cardId slug", async () => {
+    const d = new MockDriver();
+    const events = await collectEvents(
+      d.chatStream({
+        workspacePath: "/tmp/ws",
+        role: "ba",
+        cardId: "req42",
+        boardId: "b1",
+        history: [],
+        message: "clarify",
+      }),
+    );
+    const done = events.find((e) => e.type === "done");
+    expect(done?.type === "done" && done.summary).toMatch(/EPIC_MODE create/);
+    expect(done?.type === "done" && done.summary).toMatch(/req42/);
+  });
 });

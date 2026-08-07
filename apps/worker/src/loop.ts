@@ -26,6 +26,8 @@ export async function tick(
         cardId: claimedJob.cardId,
         employeeId: claimedJob.employeeId,
         boardId: claimedJob.boardId,
+        trigger: claimedJob.trigger,
+        payload: claimedJob.payload ?? null,
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

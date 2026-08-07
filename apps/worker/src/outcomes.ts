@@ -37,6 +37,9 @@ export async function applyRoleOutcome(
     case "design":
       return;
 
+    case "ba":
+      return;
+
     case "split": {
       if (ctx.cardType !== "epic" || ctx.cardColumn !== "split") {
         await client.postComment(

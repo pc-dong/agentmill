@@ -223,4 +223,26 @@ describe("applyRoleOutcome", () => {
       );
     });
   });
+
+  describe("ba", () => {
+    it("does nothing (no column moves)", async () => {
+      const client = fakeClient();
+      await applyRoleOutcome(
+        "ba",
+        "EPIC_MODE create\nARTIFACT file docs/epics/x/EPIC.md Epic",
+        {
+          cardId: "req1",
+          cardType: "requirement",
+          cardColumn: "requirements",
+          epicId: null,
+          artifacts: [],
+        },
+        client,
+      );
+      expect(client.createCard).not.toHaveBeenCalled();
+      expect(client.moveCard).not.toHaveBeenCalled();
+      expect(client.postComment).not.toHaveBeenCalled();
+      expect(client.postTestResult).not.toHaveBeenCalled();
+    });
+  });
 });
