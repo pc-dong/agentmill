@@ -263,7 +263,7 @@ describe("executeClaimedJob", () => {
       const baSettle = vi.fn(async () => ({}));
       const completeJob = vi.fn(async () => {});
       const postComment = vi.fn(async () => {});
-      const oneshot = vi.fn(async (input: { role: string }) => ({
+      const oneshot = vi.fn(async (input: { role: string; prompt: string }) => ({
         status: "ok" as const,
         summary: `Mock ${input.role} deep dive\nARTIFACT file docs/aiw/x.md X`,
         artifacts: [{ kind: "file" as const, href: "docs/aiw/x.md", label: "X" }],
@@ -290,6 +290,7 @@ describe("executeClaimedJob", () => {
         })),
       });
 
+      const transcript = "user: need SSO\n\nba: which IdP?";
       await executeClaimedJob(
         client as never,
         { id: "mock", displayName: "Mock", oneshot, chatStream: async function* () {} },
@@ -298,12 +299,13 @@ describe("executeClaimedJob", () => {
           cardId: "req1",
           employeeId: "e-ba",
           trigger: "deep_dive",
-          payload: "please deep dive",
+          payload: transcript,
         },
       );
 
       expect(oneshot).toHaveBeenCalledOnce();
       expect(oneshot.mock.calls[0]![0].role).toBe("baDeepDive");
+      expect(oneshot.mock.calls[0]![0].prompt).toContain(transcript);
       expect(baSettle).not.toHaveBeenCalled();
       expect(completeJob).toHaveBeenCalledOnce();
       expect(postComment).toHaveBeenCalledWith(
@@ -311,6 +313,94 @@ describe("executeClaimedJob", () => {
         "bot",
         expect.stringContaining("deep dive"),
       );
+    });
+
+    it("settle force-link fails when protocol epicId mismatches linked epic", async () => {
+      workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-ba-exec-"));
+      process.env.AIW_BA_TEMPLATES = templatesDir;
+
+      const baSettle = vi.fn(async () => ({}));
+      const completeJob = vi.fn(async () => {});
+      const failJob = vi.fn(async () => {});
+      const oneshot = vi.fn(async () => ({
+        status: "ok" as const,
+        summary: "should not run",
+        artifacts: [],
+      }));
+
+      const payload = [
+        "EPIC_MODE create",
+        "EPIC_ID E-WRONG-999",
+        "EPIC_SLUG wrong",
+        "EPIC_TITLE Wrong theme",
+        "PRD_ID P-999-01",
+        "PRD_SLUG x",
+        "PRD_TITLE X",
+        "ARTIFACT file docs/epics/E-WRONG-999-wrong/EPIC.md Epic",
+        "ARTIFACT file docs/epics/E-WRONG-999-wrong/shared-context.md Shared",
+        "ARTIFACT file docs/epics/E-WRONG-999-wrong/prds/P-999-01-x.md PRD",
+      ].join("\n");
+
+      const getCard = vi.fn(async (id: string) => {
+        if (id === "epic1") {
+          return {
+            id: "epic1",
+            type: "epic",
+            title: "Login",
+            description: "epic_id: E-DEMO-001\n",
+            column: "requirements",
+            epicId: null,
+            frozen: false,
+            artifacts: [],
+          };
+        }
+        return {
+          id: "req1",
+          type: "requirement",
+          title: "SSO",
+          description: "",
+          column: "requirements",
+          epicId: "epic1",
+          frozen: false,
+          artifacts: [],
+        };
+      });
+
+      const client = fakeClient({
+        baSettle,
+        completeJob,
+        failJob,
+        getCard,
+        getBoard: vi.fn(async () => ({ workspacePath })),
+        getEmployee: vi.fn(async () => ({
+          id: "e-ba",
+          role: "ba",
+          displayName: "BA Bot",
+        })),
+      });
+
+      await executeClaimedJob(
+        client as never,
+        { id: "mock", displayName: "Mock", oneshot, chatStream: async function* () {} },
+        {
+          ...job,
+          cardId: "req1",
+          employeeId: "e-ba",
+          trigger: "settle",
+          payload,
+        },
+      );
+
+      expect(failJob).toHaveBeenCalledOnce();
+      expect(failJob.mock.calls[0]![1]).toMatch(/epicKey mismatch/);
+      expect(baSettle).not.toHaveBeenCalled();
+      expect(completeJob).not.toHaveBeenCalled();
+      expect(oneshot).not.toHaveBeenCalled();
+      expect(
+        fs.existsSync(
+          path.join(workspacePath, "docs/epics/E-WRONG-999-wrong/EPIC.md"),
+        ),
+      ).toBe(false);
     });
   });
 });

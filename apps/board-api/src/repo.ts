@@ -393,7 +393,16 @@ export class BoardRepo {
       if (!job || job.status !== "open") return null;
       const card = this.getCard(job.card_id);
       if (!card || card.frozen || card.lockedJobId) return null;
-      if (this.sessionRepo().getOpenSessionForCard(job.card_id)) return null;
+      const openSession = this.sessionRepo().getOpenSessionForCard(job.card_id);
+      if (openSession) {
+        const full = this.getJob(jobId);
+        if (
+          !full ||
+          (full.trigger !== "settle" && full.trigger !== "deep_dive")
+        ) {
+          return null;
+        }
+      }
       const now = new Date().toISOString();
       const updateResult = this.db
         .prepare(
@@ -488,7 +497,11 @@ export class BoardRepo {
       .all(boardId) as Array<{ id: string }>;
     return rows
       .map((r) => this.getJob(r.id)!)
-      .filter((job) => !openSessionCardIds.has(job.cardId));
+      .filter((job) => {
+        if (!openSessionCardIds.has(job.cardId)) return true;
+        // settle / deep_dive may still run while UI closes the session
+        return job.trigger === "settle" || job.trigger === "deep_dive";
+      });
   }
 
   createPollJobs(boardId: string): number {

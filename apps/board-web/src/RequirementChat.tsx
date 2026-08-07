@@ -196,6 +196,7 @@ export function RequirementChat(props: {
 
   async function deepDive() {
     setError(null);
+    setStatusNote(null);
     setBusy(true);
     try {
       const transcript = lines
@@ -205,6 +206,14 @@ export function RequirementChat(props: {
         .trim();
       const summary =
         transcript || `Deep dive for: ${props.cardTitle}`;
+      // Close open session first so Worker can claim the deep_dive job.
+      if (sessionId) {
+        await api.settleSession(sessionId, {
+          comment: "closed for deep_dive",
+        });
+        setSessionId(null);
+        setLines([]);
+      }
       await api.createBaJob(props.cardId, {
         kind: "deep_dive",
         summary,

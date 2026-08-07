@@ -435,6 +435,41 @@ describe("BoardRepo", () => {
     expect(claimable.some((j) => j.id === sessionJob.id)).toBe(false);
   });
 
+  it("listClaimableJobs allows settle/deep_dive even with open session", () => {
+    const { repo, sessions } = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const ba = repo.listEmployees(board.id).find((e) => e.role === "ba")!;
+    const card = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "In chat",
+      column: "requirements",
+      description: "",
+    });
+    sessions.createSession({
+      boardId: board.id,
+      cardId: card.id,
+      employeeRole: "ba",
+    });
+    const deepDive = repo.createJob({
+      boardId: board.id,
+      cardId: card.id,
+      employeeId: ba.id,
+      trigger: "deep_dive",
+      payload: "transcript",
+    });
+    const mention = repo.createJob({
+      boardId: board.id,
+      cardId: card.id,
+      employeeId: ba.id,
+      trigger: "mention",
+    });
+
+    const claimable = repo.listClaimableJobs(board.id);
+    expect(claimable.map((j) => j.id)).toContain(deepDive.id);
+    expect(claimable.map((j) => j.id)).not.toContain(mention.id);
+  });
+
   it("seeds BA Bot watching requirements", () => {
     const { repo } = tempDb();
     const board = repo.createBoard({ name: "b", workspacePath: "/tmp/x" });

@@ -139,6 +139,82 @@ describe("ba-settle", () => {
     ).toBe(true);
   });
 
+  it("ba-settle link returns 400 when epicKey mismatches linked epic", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "b", workspacePath: "/tmp/ws" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Login",
+      description: "epic_id: E-DEMO-001\n",
+      column: "requirements",
+    });
+    const req = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "Need SSO",
+      description: "",
+      column: "requirements",
+      epicId: epic.id,
+    });
+    const res = await app.request(`/cards/${req.id}/ba-settle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        mode: "link",
+        epicKey: "E-OTHER-999",
+        epicTitle: "Other",
+        epicSlug: "other",
+        artifacts: [
+          {
+            kind: "file",
+            href: "docs/epics/E-OTHER-999-other/prds/P-999-01-x.md",
+            label: "PRD",
+          },
+        ],
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/epicKey mismatch/);
+    expect(body.error).toContain("E-OTHER-999");
+    expect(body.error).toContain("E-DEMO-001");
+  });
+
+  it("ba-settle create→force-link returns 400 when epicKey mismatches", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "b", workspacePath: "/tmp/ws" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Login",
+      description: "epic_id: E-DEMO-001\n",
+      column: "requirements",
+    });
+    const req = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "Need SSO",
+      description: "",
+      column: "requirements",
+      epicId: epic.id,
+    });
+    const res = await app.request(`/cards/${req.id}/ba-settle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        mode: "create",
+        epicKey: "E-WRONG-002",
+        epicTitle: "Wrong",
+        epicSlug: "wrong",
+        artifacts: [],
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/epicKey mismatch/);
+  });
+
   it("ba-jobs creates settle job with payload", async () => {
     const { app, repo } = appWithRepo();
     const board = repo.createBoard({ name: "b", workspacePath: "/tmp/ws" });

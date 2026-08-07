@@ -3,6 +3,12 @@ import type { BoardClient } from "./boardClient.js";
 import { resolveBaTemplatesDir, writeBaDocuments } from "./baWrite.js";
 import { applyRoleOutcome } from "./outcomes.js";
 
+/** Parse `epic_id: E-...` from an epic card description. */
+export function parseEpicIdFromDescription(description: string): string | null {
+  const m = /^epic_id:\s*(\S+)/m.exec(description);
+  return m?.[1] ?? null;
+}
+
 function enrichSplitPrompt(
   base: string,
   requirements: Array<{ title: string }>,
@@ -58,8 +64,20 @@ export async function executeClaimedJob(
         return;
       }
       let protocol = parsed;
-      if (card.epicId && protocol.mode === "create") {
+      const forcedLink = Boolean(card.epicId && protocol.mode === "create");
+      if (forcedLink) {
         protocol = { ...protocol, mode: "link" };
+      }
+      if (card.epicId && protocol.mode === "link") {
+        const epicCard = await client.getCard(card.epicId);
+        const linkedKey = parseEpicIdFromDescription(epicCard.description ?? "");
+        if (linkedKey && protocol.epicId !== linkedKey) {
+          await client.failJob(
+            job.id,
+            `epicKey mismatch: protocol has ${protocol.epicId} but linked epic is ${linkedKey}`,
+          );
+          return;
+        }
       }
       const templatesDir = resolveBaTemplatesDir();
       const { written } = await writeBaDocuments({
@@ -75,10 +93,9 @@ export async function executeClaimedJob(
         epicTitle: protocol.epicTitle,
         epicSlug: protocol.epicSlug,
         artifacts,
-        warning:
-          card.epicId && parsed.mode === "create"
-            ? "create requested but epicId set; forced link"
-            : undefined,
+        warning: forcedLink
+          ? "create requested but epicId set; forced link"
+          : undefined,
       });
       await client.completeJob(job.id, {
         summary: `ba-settle wrote: ${written.join(", ")}`,
@@ -110,6 +127,12 @@ export async function executeClaimedJob(
         (c) => c.type === "requirement" && c.epicId === card.id,
       );
       prompt = enrichSplitPrompt(prompt, siblings);
+    }
+    if (
+      (trigger === "deep_dive" || roleKey === "baDeepDive") &&
+      job.payload?.trim()
+    ) {
+      prompt = `${prompt}\n\n${job.payload.trim()}`;
     }
 
     const result = await driver.oneshot({

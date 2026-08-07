@@ -14,6 +14,12 @@ import type { SessionRepo } from "./sessions.js";
 
 const mentionRe = /@(Design|Split|Verify|Dev|Test|Review|BA)\s*Bot/i;
 
+/** Parse `epic_id: E-...` from an epic card description. */
+export function parseEpicIdFromDescription(description: string): string | null {
+  const m = /^epic_id:\s*(\S+)/m.exec(description);
+  return m?.[1] ?? null;
+}
+
 export function createApp(repo: BoardRepo, sessions: SessionRepo) {
   const app = new Hono();
 
@@ -444,6 +450,15 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       if (!epic || epic.type !== "epic") {
         return c.json({ error: "linked epic not found" }, 404);
       }
+      const linkedEpicKey = parseEpicIdFromDescription(epic.description);
+      if (linkedEpicKey && body.epicKey !== linkedEpicKey) {
+        return c.json(
+          {
+            error: `epicKey mismatch: body has ${body.epicKey} but linked epic is ${linkedEpicKey}`,
+          },
+          400,
+        );
+      }
       const epicUpdated = repo.updateCard(epic.id, {
         artifacts: mergeArtifacts(epic.artifacts, body.artifacts),
       });
@@ -453,11 +468,11 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       repo.addComment({
         cardId: card.id,
         author: "ba",
-        body: `[audit] ba-settle link epic ${body.epicKey}`,
+        body: `[audit] ba-settle link epic ${linkedEpicKey ?? body.epicKey}`,
       });
       return c.json({
         mode: "link",
-        epicKey: body.epicKey,
+        epicKey: linkedEpicKey ?? body.epicKey,
         epicTitle: body.epicTitle,
         epicSlug: body.epicSlug,
         artifacts: body.artifacts,
