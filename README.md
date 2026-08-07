@@ -21,3 +21,15 @@ pnpm dev:web   # :5173
 pnpm --filter @ai-workforce/domain test
 pnpm --filter @ai-workforce/board-api test
 ```
+
+## Plan 2 — Worker
+
+```bash
+export AIW_BOARD_ID=<board-id from UI or API>
+export AIW_DRIVER=mock          # or cursor
+export CURSOR_API_KEY=...       # required for cursor
+pnpm --filter @ai-workforce/agent build
+pnpm dev:worker
+```
+
+Smoke (API must be running): `./scripts/plan2-smoke.sh`
