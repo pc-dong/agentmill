@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Card } from "./api";
+import { DesignChat } from "./DesignChat";
 
 export function CardDrawer(props: {
   card: Card;
@@ -43,9 +44,16 @@ export function CardDrawer(props: {
       {error && <p style={{ color: "#b91c1c" }}>{error}</p>}
 
       {props.card.type === "epic" && props.card.column === "design" && (
-        <button type="button" onClick={() => approveTo("split")}>
-          人批：设计 → 拆分
-        </button>
+        <>
+          <DesignChat
+            boardId={props.card.boardId}
+            cardId={props.card.id}
+            onSettled={props.onChanged}
+          />
+          <button type="button" onClick={() => approveTo("split")}>
+            人批：设计 → 拆分
+          </button>
+        </>
       )}
       {props.card.type === "task" && props.card.column === "accept" && (
         <button type="button" onClick={() => approveTo("done")}>

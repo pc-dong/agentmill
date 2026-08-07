@@ -11,6 +11,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ""),
       },
+      "/ws": {
+        target: "http://127.0.0.1:8787",
+        ws: true,
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/ws/, "") || "/",
+      },
     },
   },
 });

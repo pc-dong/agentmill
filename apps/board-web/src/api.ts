@@ -9,6 +9,12 @@ async function json<T>(res: Response | Promise<Response>): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export type ArtifactHint = {
+  kind: "file" | "url" | "pr";
+  href: string;
+  label?: string;
+};
+
 export type Card = {
   id: string;
   boardId: string;
@@ -19,7 +25,15 @@ export type Card = {
   epicId: string | null;
   reworkCount: number;
   frozen: boolean;
-  artifacts: Array<{ kind: string; href: string; label?: string }>;
+  artifacts: ArtifactHint[];
+};
+
+export type SessionMessage = {
+  id: string;
+  sessionId: string;
+  role: "user" | "assistant" | "system";
+  body: string;
+  createdAt: string;
 };
 
 export const api = {
@@ -83,6 +97,25 @@ export const api = {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ author, body }),
+      }),
+    ),
+  createSession: (boardId: string, cardId: string) =>
+    json<{ id: string }>(
+      fetch(`${base}/boards/${boardId}/cards/${cardId}/sessions`, {
+        method: "POST",
+      }),
+    ),
+  listSessionMessages: (sessionId: string) =>
+    json<SessionMessage[]>(fetch(`${base}/sessions/${sessionId}/messages`)),
+  settleSession: (
+    sessionId: string,
+    body: { artifacts?: ArtifactHint[]; comment?: string },
+  ) =>
+    json<{ session: unknown; card: Card }>(
+      fetch(`${base}/sessions/${sessionId}/settle`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
       }),
     ),
 };

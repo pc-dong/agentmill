@@ -36,3 +36,37 @@ body { margin: 0; }
   background: #fff; border-left: 1px solid #d6d3d1; padding: 16px;
   overflow: auto;
 }
+.design-chat {
+  margin: 12px 0;
+  padding: 12px;
+  background: #fafaf9;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+}
+.design-chat h3 { margin: 0 0 8px; font-size: 14px; }
+.chat-transcript {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  max-height: 240px;
+  overflow: auto;
+}
+.chat-line {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.chat-user { background: #dbeafe; }
+.chat-assistant { background: #fff; border: 1px solid #e7e5e4; }
+.chat-line pre {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 12px;
+}
+.chat-streaming { color: #78716c; font-size: 11px; }
+.chat-error { color: #b91c1c; font-size: 12px; }
+.chat-actions { display: flex; gap: 8px; margin-top: 8px; }
+.design-chat textarea { width: 100%; margin-top: 4px; }
