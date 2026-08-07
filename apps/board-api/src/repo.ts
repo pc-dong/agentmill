@@ -468,8 +468,7 @@ export class BoardRepo {
           const existing = this.db
             .prepare(
               `SELECT id FROM jobs
-               WHERE card_id = ? AND employee_id = ?
-                 AND status IN ('open', 'claimed')`,
+               WHERE card_id = ? AND employee_id = ?`,
             )
             .get(card.id, emp.id);
           if (existing) continue;

@@ -32,4 +32,6 @@ pnpm --filter @ai-workforce/agent build
 pnpm dev:worker
 ```
 
+Poll creates one job per (card, employee) pair. It does not re-queue cards that already have any job for that employee (open, claimed, done, or failed). Use `@Design Bot` (or other role bots) in a comment to re-run work on a card.
+
 Smoke (API must be running): `./scripts/plan2-smoke.sh`

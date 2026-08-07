@@ -247,6 +247,50 @@ describe("BoardRepo", () => {
     expect(idleJob?.trigger).toBe("poll");
   });
 
+  it("createPollJobs skips card+employee pairs with any prior job (done/failed)", () => {
+    const repo = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const designEmp = repo
+      .listEmployees(board.id)
+      .find((e) => e.role === "design")!;
+
+    const doneCard = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Done card",
+      column: "design",
+      description: "",
+    });
+    const doneJob = repo.createJob({
+      boardId: board.id,
+      cardId: doneCard.id,
+      employeeId: designEmp.id,
+      trigger: "poll",
+    });
+    repo.claimJob(doneJob.id, "worker-1");
+    repo.completeJob(doneJob.id, { summary: "finished", artifacts: [] });
+
+    const failedCard = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "Failed card",
+      column: "design",
+      description: "",
+      epicId: doneCard.id,
+    });
+    const failedJob = repo.createJob({
+      boardId: board.id,
+      cardId: failedCard.id,
+      employeeId: designEmp.id,
+      trigger: "mention",
+    });
+    repo.claimJob(failedJob.id, "worker-1");
+    repo.failJob(failedJob.id, "boom");
+
+    expect(repo.createPollJobs(board.id)).toBe(0);
+    expect(repo.listOpenJobs(board.id)).toHaveLength(0);
+  });
+
   it("completeJob writes artifacts and unlocks", () => {
     const repo = tempDb();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });

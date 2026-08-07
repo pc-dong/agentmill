@@ -20,12 +20,25 @@ export async function tick(
     const claimedJob = await client.claimJob(job.id);
     if (!claimedJob) continue;
     claimed++;
-    await executeClaimedJob(client, driver, {
-      id: claimedJob.id,
-      cardId: claimedJob.cardId,
-      employeeId: claimedJob.employeeId,
-      boardId: claimedJob.boardId,
-    });
+    try {
+      await executeClaimedJob(client, driver, {
+        id: claimedJob.id,
+        cardId: claimedJob.cardId,
+        employeeId: claimedJob.employeeId,
+        boardId: claimedJob.boardId,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error(`executeClaimedJob failed for job ${claimedJob.id}:`, message);
+      try {
+        await client.failJob(claimedJob.id, message);
+      } catch (failErr) {
+        console.error(
+          `failJob also failed for job ${claimedJob.id}:`,
+          failErr instanceof Error ? failErr.message : String(failErr),
+        );
+      }
+    }
   }
 
   return { claimed, pollCreated };
