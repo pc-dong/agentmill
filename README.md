@@ -2,9 +2,9 @@
 
 Lightweight kanban for human + AI employee software delivery.
 
-## Plan 1 (current)
+Plan 1 complete (board domain, SQLite API, React kanban). Plan 2 worker available (`mock` or `cursor` driver).
 
-Board domain rules, SQLite API, React kanban. No Worker/Cursor yet.
+## Plan 1 — Run & Test
 
 ### Run
 
