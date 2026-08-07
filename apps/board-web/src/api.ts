@@ -99,10 +99,12 @@ export const api = {
         body: JSON.stringify({ author, body }),
       }),
     ),
-  createSession: (boardId: string, cardId: string) =>
+  createSession: (boardId: string, cardId: string, employeeRole = "design") =>
     json<{ id: string }>(
       fetch(`${base}/boards/${boardId}/cards/${cardId}/sessions`, {
         method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ employeeRole }),
       }),
     ),
   listSessionMessages: (sessionId: string) =>
@@ -113,6 +115,17 @@ export const api = {
   ) =>
     json<{ session: unknown; card: Card }>(
       fetch(`${base}/sessions/${sessionId}/settle`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    ),
+  createBaJob: (
+    cardId: string,
+    body: { kind: "settle" | "deep_dive"; summary: string },
+  ) =>
+    json<{ job: { id: string } }>(
+      fetch(`${base}/cards/${cardId}/ba-jobs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

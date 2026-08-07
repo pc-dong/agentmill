@@ -163,6 +163,27 @@ describe("BoardClient", () => {
     await expect(client().listSessionMessages("s1")).resolves.toEqual(messages);
   });
 
+  it("getSession GETs /sessions/:sessionId", async () => {
+    const session = {
+      id: "s1",
+      boardId: BOARD_ID,
+      cardId: "c1",
+      employeeRole: "ba",
+      status: "open",
+      createdAt: "t",
+      updatedAt: "t",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(url).toBe(`${API}/sessions/s1`);
+        return new Response(JSON.stringify(session), { status: 200 });
+      }),
+    );
+
+    await expect(client().getSession("s1")).resolves.toEqual(session);
+  });
+
   it("createPollJobs POSTs poll-jobs endpoint", async () => {
     vi.stubGlobal(
       "fetch",

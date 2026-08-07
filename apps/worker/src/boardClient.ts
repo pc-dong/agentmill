@@ -47,6 +47,16 @@ export type SessionMessage = {
   createdAt: string;
 };
 
+export type Session = {
+  id: string;
+  boardId: string;
+  cardId: string;
+  employeeRole: string;
+  status: "open" | "closed";
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type BoardClientOptions = {
   apiBase: string;
   boardId: string;
@@ -183,6 +193,10 @@ export class BoardClient {
 
   async listSessionMessages(sessionId: string): Promise<SessionMessage[]> {
     return this.getJson<SessionMessage[]>(`/sessions/${sessionId}/messages`);
+  }
+
+  async getSession(sessionId: string): Promise<Session> {
+    return this.getJson<Session>(`/sessions/${sessionId}`);
   }
 
   private async getJson<T>(path: string): Promise<T> {

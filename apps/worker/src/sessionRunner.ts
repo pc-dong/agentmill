@@ -17,6 +17,7 @@ export async function handleSessionUserMessage(
 ): Promise<void> {
   const board = await client.getBoard();
   const card = await client.getCard(msg.cardId);
+  const session = await client.getSession(msg.sessionId);
   const rawMessages = await client.listSessionMessages(msg.sessionId);
 
   const history = rawMessages
@@ -27,10 +28,14 @@ export async function handleSessionUserMessage(
       content: m.body,
     }));
 
+  const employeeRole =
+    session.employeeRole ||
+    (card.type === "requirement" ? "ba" : "design");
+
   try {
     for await (const event of driver.chatStream({
       workspacePath: board.workspacePath,
-      role: card.column,
+      role: employeeRole,
       cardId: msg.cardId,
       boardId: msg.boardId,
       history,

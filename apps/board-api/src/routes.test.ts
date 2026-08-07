@@ -256,4 +256,38 @@ describe("routes", () => {
     expect(card.lockedJobId).toBeNull();
     expect(card.artifacts[0]?.href).toBe("docs/a.md");
   });
+
+  it("creates session with employeeRole from body and GETs it", async () => {
+    const { app, repo, sessions } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const req = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "R",
+      column: "requirements",
+      description: "",
+    });
+
+    const createRes = await app.request(
+      `http://localhost/boards/${board.id}/cards/${req.id}/sessions`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ employeeRole: "ba" }),
+      },
+    );
+    expect(createRes.status).toBe(201);
+    const { id } = (await createRes.json()) as { id: string };
+    expect(sessions.getSession(id)?.employeeRole).toBe("ba");
+
+    const getRes = await app.request(`http://localhost/sessions/${id}`);
+    expect(getRes.status).toBe(200);
+    const session = await getRes.json();
+    expect(session).toMatchObject({
+      id,
+      cardId: req.id,
+      employeeRole: "ba",
+      status: "open",
+    });
+  });
 });

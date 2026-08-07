@@ -122,6 +122,11 @@ export function App() {
       {selected && (
         <CardDrawer
           card={selected}
+          epicTitle={
+            selected.epicId
+              ? cards.find((c) => c.id === selected.epicId)?.title
+              : undefined
+          }
           onClose={() => setSelected(null)}
           onChanged={refresh}
         />

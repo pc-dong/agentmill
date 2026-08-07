@@ -4,15 +4,28 @@ import { handleSessionUserMessage } from "./sessionRunner.js";
 
 function fakeClient(overrides: {
   messages?: Array<{ role: string; body: string }>;
+  employeeRole?: string;
+  cardType?: string;
+  column?: string;
 } = {}) {
   return {
     getBoard: async () => ({ workspacePath: "/tmp/ws" }),
     getCard: async () => ({
       id: "c1",
       boardId: "b1",
-      column: "design",
+      type: overrides.cardType ?? "epic",
+      column: overrides.column ?? "design",
       title: "Card",
       description: "Desc",
+    }),
+    getSession: async () => ({
+      id: "s1",
+      boardId: "b1",
+      cardId: "c1",
+      employeeRole: overrides.employeeRole ?? "design",
+      status: "open",
+      createdAt: "t",
+      updatedAt: "t",
     }),
     listSessionMessages: async () =>
       overrides.messages ?? [
@@ -63,6 +76,54 @@ describe("handleSessionUserMessage", () => {
       sessionId: "s1",
       summary: "Mock reply done",
     });
+  });
+
+  it("passes session employeeRole into chatStream", async () => {
+    let seenRole: string | undefined;
+    const driver: AgentDriver = {
+      id: "mock",
+      displayName: "Mock",
+      oneshot: async () => ({ status: "ok", summary: "", artifacts: [] }),
+      chatStream: async function* (input) {
+        seenRole = input.role;
+        yield { type: "done", summary: "ok" };
+      },
+    };
+
+    await handleSessionUserMessage(
+      fakeClient({ employeeRole: "ba", cardType: "requirement", column: "requirements" }) as never,
+      driver,
+      { sessionId: "s1", cardId: "c1", text: "hi", boardId: "b1" },
+      vi.fn(),
+    );
+
+    expect(seenRole).toBe("ba");
+  });
+
+  it("falls back to ba for requirement when employeeRole empty", async () => {
+    let seenRole: string | undefined;
+    const driver: AgentDriver = {
+      id: "mock",
+      displayName: "Mock",
+      oneshot: async () => ({ status: "ok", summary: "", artifacts: [] }),
+      chatStream: async function* (input) {
+        seenRole = input.role;
+        yield { type: "done", summary: "ok" };
+      },
+    };
+
+    await handleSessionUserMessage(
+      fakeClient({
+        employeeRole: "",
+        cardType: "requirement",
+        column: "requirements",
+      }) as never,
+      driver,
+      { sessionId: "s1", cardId: "c1", text: "hi", boardId: "b1" },
+      vi.fn(),
+    );
+
+    expect(seenRole).toBe("ba");
   });
 
   it("emits agent_error on driver error event", async () => {

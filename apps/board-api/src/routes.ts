@@ -305,7 +305,7 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     return c.json(job);
   });
 
-  app.post("/boards/:boardId/cards/:cardId/sessions", (c) => {
+  app.post("/boards/:boardId/cards/:cardId/sessions", async (c) => {
     const boardId = c.req.param("boardId");
     const cardId = c.req.param("cardId");
     if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
@@ -316,8 +316,23 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     if (sessions.getOpenSessionForCard(cardId)) {
       return c.json({ error: "open session exists" }, 409);
     }
-    const session = sessions.createSession({ boardId, cardId });
+    const body = z
+      .object({
+        employeeRole: z.string().min(1).optional(),
+      })
+      .parse(await c.req.json().catch(() => ({})));
+    const session = sessions.createSession({
+      boardId,
+      cardId,
+      employeeRole: body.employeeRole ?? "design",
+    });
     return c.json({ id: session.id }, 201);
+  });
+
+  app.get("/sessions/:sessionId", (c) => {
+    const session = sessions.getSession(c.req.param("sessionId"));
+    if (!session) return c.json({ error: "not found" }, 404);
+    return c.json(session);
   });
 
   app.get("/sessions/:sessionId/messages", (c) => {

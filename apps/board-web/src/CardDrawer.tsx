@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { api, type Card } from "./api";
 import { DesignChat } from "./DesignChat";
+import { RequirementChat } from "./RequirementChat";
 
 export function CardDrawer(props: {
   card: Card;
+  epicTitle?: string;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -42,6 +44,17 @@ export function CardDrawer(props: {
       </p>
       <p>{props.card.description}</p>
       {error && <p style={{ color: "#b91c1c" }}>{error}</p>}
+
+      {props.card.type === "requirement" &&
+        props.card.column === "requirements" && (
+          <RequirementChat
+            boardId={props.card.boardId}
+            cardId={props.card.id}
+            epicId={props.card.epicId}
+            epicTitle={props.epicTitle}
+            onSettled={props.onChanged}
+          />
+        )}
 
       {props.card.type === "epic" && props.card.column === "design" && (
         <>
