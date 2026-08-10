@@ -29,6 +29,7 @@ export type CardRecord = {
   artifacts: ArtifactRef[];
   /** Populated for design cards when listing with links. */
   requirementIds?: string[];
+  splitVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -169,6 +170,7 @@ export class BoardRepo {
                 column_id as columnId, epic_id as epicId, design_id as designId, status,
                 rework_count as reworkCount, frozen, artifacts_json as artifactsJson,
                 locked_job_id as lockedJobId, locked_at as lockedAt,
+                split_verified_at as splitVerifiedAt,
                 created_at as createdAt, updated_at as updatedAt
          FROM cards WHERE id = ?`,
       )
@@ -188,6 +190,7 @@ export class BoardRepo {
           artifactsJson: string;
           lockedJobId: string | null;
           lockedAt: string | null;
+          splitVerifiedAt: string | null;
           createdAt: string;
           updatedAt: string;
         }
@@ -210,6 +213,7 @@ export class BoardRepo {
       frozen: !!row.frozen,
       lockedJobId: row.lockedJobId || null,
       lockedAt: row.lockedAt || null,
+      splitVerifiedAt: row.splitVerifiedAt ?? null,
       artifacts: JSON.parse(row.artifactsJson) as ArtifactRef[],
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -308,6 +312,30 @@ export class BoardRepo {
       )
       .all(designId) as Array<{ id: string }>;
     return rows.map((r) => this.getCard(r.id)!);
+  }
+
+  markDesignSplitVerified(designId: string): void {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE cards SET split_verified_at = ?, updated_at = ? WHERE id = ? AND type = 'design'`,
+      )
+      .run(now, now, designId);
+  }
+
+  markDesignSplitDirty(designId: string): void {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE cards SET split_verified_at = NULL, updated_at = ? WHERE id = ? AND type = 'design'`,
+      )
+      .run(now, designId);
+    this.db
+      .prepare(
+        `UPDATE cards SET frozen = 1, updated_at = ?
+         WHERE design_id = ? AND type = 'task' AND column_id = 'design'`,
+      )
+      .run(now, designId);
   }
 
   designTasksAllDone(designId: string): boolean {

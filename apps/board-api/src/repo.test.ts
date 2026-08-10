@@ -541,4 +541,56 @@ describe("BoardRepo", () => {
     expect(designs[0]!.requirementIds).toContain(req.id);
     expect(repo.getCard(req.id)!.status).toBe("in_progress");
   });
+
+  it("markDesignSplitVerified and Dirty round-trip", () => {
+    const { repo } = tempDb();
+    const board = repo.createBoard({ name: "b", workspacePath: "/tmp/x" });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "D",
+      description: "",
+      column: "design",
+    });
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      description: "",
+      column: "design",
+      designId: design.id,
+      frozen: false,
+    });
+    expect(repo.getCard(design.id)!.splitVerifiedAt).toBeNull();
+    repo.markDesignSplitVerified(design.id);
+    expect(repo.getCard(design.id)!.splitVerifiedAt).toBeTruthy();
+    repo.markDesignSplitDirty(design.id);
+    expect(repo.getCard(design.id)!.splitVerifiedAt).toBeNull();
+    expect(repo.getCard(task.id)!.frozen).toBe(true);
+  });
+
+  it("markDesignSplitDirty does not freeze tasks outside design", () => {
+    const { repo } = tempDb();
+    const board = repo.createBoard({ name: "b", workspacePath: "/tmp/x" });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "D",
+      description: "",
+      column: "design",
+    });
+    const inflight = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      description: "",
+      column: "dev",
+      designId: design.id,
+      frozen: false,
+    });
+    repo.markDesignSplitVerified(design.id);
+    repo.markDesignSplitDirty(design.id);
+    expect(repo.getCard(inflight.id)!.frozen).toBe(false);
+    expect(repo.getCard(inflight.id)!.column).toBe("dev");
+  });
 });
