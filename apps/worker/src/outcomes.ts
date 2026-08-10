@@ -147,14 +147,14 @@ export async function applyRoleOutcome(
               await client.updateCard(t.id, { frozen: false });
             }
           }
-          if (client.markDesignSplitVerified) {
-            await client.markDesignSplitVerified(ctx.cardId);
-          }
           await client.postComment(
             ctx.cardId,
             "bot",
-            "Unfroze related task cards for development.",
+            "Unfroze related task cards; they remain in design until moved to dev.",
           );
+        }
+        if (client.markDesignSplitVerified) {
+          await client.markDesignSplitVerified(ctx.cardId);
         }
       } else if (outcome.verify === "fail") {
         await client.postComment(

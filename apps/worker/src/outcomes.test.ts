@@ -140,6 +140,41 @@ describe("applyRoleOutcome", () => {
         expect.stringMatching(/VERIFY fail/),
       );
     });
+
+    it("verify pass marks verified even without listCards/updateCard", async () => {
+      const markDesignSplitVerified = vi.fn(async () => {});
+      const client = fakeClient({
+        listCards: undefined,
+        updateCard: undefined,
+        markDesignSplitVerified,
+      });
+      await applyRoleOutcome("verify", "VERIFY pass", designCtx, client);
+      expect(markDesignSplitVerified).toHaveBeenCalledWith("design1");
+    });
+  });
+
+  describe("re-split", () => {
+    it("second split appends tasks and marks dirty again without wiping prior creates", async () => {
+      const client = fakeClient();
+      const firstSplit = [
+        "TASK Login API | oauth",
+        "TASK UI | forms",
+      ].join("\n");
+      await applyRoleOutcome("split", firstSplit, designCtx, client);
+      expect(client.createCard).toHaveBeenCalledTimes(2);
+      expect(client.markDesignSplitDirty).toHaveBeenCalledTimes(1);
+
+      await applyRoleOutcome("verify", "VERIFY pass", designCtx, client);
+      expect(client.markDesignSplitVerified).toHaveBeenCalledWith("design1");
+
+      client.markDesignSplitDirty.mockClear();
+
+      const secondSplit = "TASK Auth refresh | token rotation";
+      await applyRoleOutcome("split", secondSplit, designCtx, client);
+      expect(client.createCard).toHaveBeenCalledTimes(3);
+      expect(client.markDesignSplitDirty).toHaveBeenCalledTimes(1);
+      expect(client.markDesignSplitDirty).toHaveBeenCalledWith("design1");
+    });
   });
 
   describe("dev", () => {
