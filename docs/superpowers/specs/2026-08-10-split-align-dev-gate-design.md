@@ -1,6 +1,6 @@
 # Design: 拆分对齐、设计列 Task 与开发门禁
 
-> 状态：已批准（用户确认继续，2026-08-10）  
+> 状态：已实现（分支 `feat/split-align-dev-gate`，2026-08-10）  
 > 实现计划：`docs/superpowers/plans/2026-08-10-split-align-dev-gate.md`  
 
 > 日期：2026-08-10  
