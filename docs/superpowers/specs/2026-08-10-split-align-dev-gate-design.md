@@ -1,6 +1,8 @@
 # Design: 拆分对齐、设计列 Task 与开发门禁
 
-> 状态：待用户审阅（对话已确认方案 1 与 §1–§3，2026-08-10）  
+> 状态：已批准（用户确认继续，2026-08-10）  
+> 实现计划：`docs/superpowers/plans/2026-08-10-split-align-dev-gate.md`  
+
 > 日期：2026-08-10  
 > 相关：`docs/superpowers/specs/2026-08-06-ai-workforce-kanban-design.md`  
 > 前置现状：设计卡 `design-jobs`（split/verify/deep_dive）；Split 产物曾直接落 `dev` 且 `frozen`，Verify pass 后 Dev poll
