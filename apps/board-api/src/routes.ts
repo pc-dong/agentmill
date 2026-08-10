@@ -288,9 +288,18 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     const cardId = c.req.param("cardId");
     const card = repo.getCard(cardId);
     if (!card) return c.json({ error: "not found" }, 404);
+    const confirmDelete = c.req.query("confirmDelete") === "true";
+    if (card.type === "task" && card.column !== "design" && !confirmDelete) {
+      return c.json(
+        { error: "in-flight task delete requires confirmDelete=true" },
+        409,
+      );
+    }
+    const designId = card.designId;
     if (!repo.deleteCard(cardId)) {
       return c.json({ error: "cannot delete" }, 409);
     }
+    if (designId) repo.markDesignSplitDirty(designId);
     return c.json({ ok: true, id: cardId });
   });
 
@@ -330,6 +339,28 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       },
     );
     if (!result.ok) return c.json({ error: result.reason }, 400);
+    if (
+      card.type === "task" &&
+      card.column === "design" &&
+      body.to === "dev" &&
+      body.actor === "human"
+    ) {
+      if (card.frozen) {
+        return c.json({ error: "任务仍冻结：请先通过「校验覆盖」" }, 400);
+      }
+      if (!card.designId) {
+        return c.json({ error: "task missing designId" }, 400);
+      }
+      const design = repo.getCard(card.designId);
+      if (!design?.splitVerifiedAt) {
+        return c.json(
+          {
+            error: "拆分未校验或已变更：请重新「校验覆盖」后再拖入开发列",
+          },
+          400,
+        );
+      }
+    }
     if (
       card.type === "design" &&
       body.to === "done" &&

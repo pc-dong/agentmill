@@ -166,14 +166,14 @@ describe("routes", () => {
         body: JSON.stringify({
           type: "task",
           title: "Bad placement",
-          column: "design",
+          column: "requirements",
           description: "",
         }),
       },
     );
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/cannot occupy column design/);
+    expect(body.error).toMatch(/cannot occupy column requirements/);
   });
 
   it("rejects test-result on wrong column or type", async () => {
@@ -437,6 +437,193 @@ describe("routes", () => {
       `http://localhost/boards/${board.id}/workspace-raw/docs/epics/E-1/../../../etc/passwd`,
     );
     expect(rawEscape.status).toBe(400);
+  });
+
+  it("blocks human design→dev when not verified", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "requirements",
+      description: "",
+    });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "D",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+      designId: design.id,
+      frozen: false,
+    });
+
+    const res = await app.request(`http://localhost/cards/${task.id}/move`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ to: "dev", actor: "human" }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: expect.stringMatching(/校验|verif/i),
+    });
+  });
+
+  it("allows human design→dev after verify mark", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "requirements",
+      description: "",
+    });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "D",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+      designId: design.id,
+      frozen: true,
+    });
+    repo.markDesignSplitVerified(design.id);
+    repo.updateCard(task.id, { frozen: false });
+
+    const res = await app.request(`http://localhost/cards/${task.id}/move`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ to: "dev", actor: "human" }),
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).column).toBe("dev");
+  });
+
+  it("rejects delete of in-flight task without confirmDelete", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "requirements",
+      description: "",
+    });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "D",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    const inflight = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      column: "dev",
+      description: "",
+      epicId: epic.id,
+      designId: design.id,
+    });
+
+    const res = await app.request(`http://localhost/cards/${inflight.id}`, {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it("deletes in-flight task with confirmDelete and dirties design", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "requirements",
+      description: "",
+    });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "D",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    const inflight = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      column: "dev",
+      description: "",
+      epicId: epic.id,
+      designId: design.id,
+    });
+    repo.markDesignSplitVerified(design.id);
+
+    const res = await app.request(
+      `http://localhost/cards/${inflight.id}?confirmDelete=true`,
+      { method: "DELETE" },
+    );
+    expect(res.status).toBe(200);
+    expect(repo.getCard(design.id)!.splitVerifiedAt).toBeNull();
+  });
+
+  it("deletes design-column task without confirmDelete and dirties design", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "requirements",
+      description: "",
+    });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "D",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+      designId: design.id,
+    });
+    repo.markDesignSplitVerified(design.id);
+
+    const res = await app.request(`http://localhost/cards/${task.id}`, {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(200);
+    expect(repo.getCard(design.id)!.splitVerifiedAt).toBeNull();
   });
 
   it("creates design deep_dive job for design cards only", async () => {
