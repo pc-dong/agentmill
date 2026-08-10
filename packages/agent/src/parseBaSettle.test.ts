@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { epicDirRel, parseBaSettle, prdRel } from "./parseBaSettle.js";
+import {
+  canonicalBaSettleArtifacts,
+  epicDirRel,
+  parseBaSettle,
+  prdRel,
+} from "./parseBaSettle.js";
 
 const sample = `
 EPIC_MODE create
@@ -84,5 +89,49 @@ ARTIFACT file docs/epics/E-DEMO-001-login/EPIC.md Epic
     if ("error" in r) return;
     expect(epicDirRel(r)).toBe("docs/epics/E-DEMO-001-login");
     expect(prdRel(r)).toBe("docs/epics/E-DEMO-001-login/prds/P-001-01-oauth.md");
+  });
+
+  it("tolerates markdown bullets, colons, and code fences", () => {
+    const r = parseBaSettle(`
+Ready to settle.
+
+\`\`\`
+- EPIC_MODE: create
+- EPIC_ID: E-DEMO-001
+- EPIC_SLUG: login
+- EPIC_TITLE: Login theme
+- PRD_ID: P-001-01
+- PRD_SLUG: oauth
+- PRD_TITLE: OAuth login
+- ARTIFACT: file docs/epics/E-DEMO-001-login/prds/P-001-01-oauth.md PRD
+\`\`\`
+`);
+    expect("error" in r).toBe(false);
+    if ("error" in r) return;
+    expect(r.mode).toBe("create");
+    expect(r.epicId).toBe("E-DEMO-001");
+    expect(r.artifacts).toHaveLength(1);
+  });
+
+  it("canonicalBaSettleArtifacts always includes Epic and PRD paths", () => {
+    const r = parseBaSettle(`
+EPIC_MODE link
+EPIC_ID E-DEMO-001
+EPIC_SLUG login
+EPIC_TITLE Login theme
+PRD_ID P-001-02
+PRD_SLUG sso
+PRD_TITLE SSO
+ARTIFACT file docs/epics/E-DEMO-001-login/prds/P-001-02-sso.md PRD
+`);
+    expect("error" in r).toBe(false);
+    if ("error" in r) return;
+    const arts = canonicalBaSettleArtifacts(r);
+    expect(arts.map((a) => a.href)).toEqual([
+      "docs/epics/E-DEMO-001-login/EPIC.md",
+      "docs/epics/E-DEMO-001-login/prds/P-001-02-sso.md",
+    ]);
+    expect(arts[0]?.label).toMatch(/Epic/);
+    expect(arts[1]?.label).toMatch(/PRD/);
   });
 });

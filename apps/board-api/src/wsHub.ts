@@ -8,6 +8,8 @@ export type WsClientRole = "ui" | "worker";
 export type WsClientMsg =
   | { type: "hello"; role: WsClientRole; boardId: string; workerId?: string }
   | { type: "session.user_message"; sessionId: string; text: string }
+  | { type: "session.abort"; sessionId: string }
+  | { type: "session.retry"; sessionId: string }
   | { type: "session.agent_delta"; sessionId: string; text: string }
   | { type: "session.agent_done"; sessionId: string; summary: string }
   | { type: "session.agent_error"; sessionId: string; message: string };
@@ -19,6 +21,7 @@ export type WsServerMsg =
       cardId: string;
       text: string;
     }
+  | { type: "session.abort"; sessionId: string }
   | { type: "session.agent_delta"; sessionId: string; text: string }
   | { type: "session.agent_done"; sessionId: string; summary: string }
   | { type: "session.agent_error"; sessionId: string; message: string }
@@ -98,6 +101,46 @@ export class WsHub {
           sessionId: msg.sessionId,
           cardId: session.cardId,
           text: msg.text,
+        });
+        break;
+      }
+
+      case "session.abort": {
+        const session = this.sessions.getSession(msg.sessionId);
+        if (!session || session.status !== "open") {
+          this.sendError(ws, "session not open");
+          return;
+        }
+        this.broadcast(session.boardId, "worker", {
+          type: "session.abort",
+          sessionId: msg.sessionId,
+        });
+        break;
+      }
+
+      case "session.retry": {
+        const session = this.sessions.getSession(msg.sessionId);
+        if (!session || session.status !== "open") {
+          this.sendError(ws, "session not open");
+          return;
+        }
+        const messages = this.sessions.listMessages(msg.sessionId);
+        let lastUser: { body: string } | undefined;
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i]?.role === "user") {
+            lastUser = messages[i];
+            break;
+          }
+        }
+        if (!lastUser) {
+          this.sendError(ws, "no user message to retry");
+          return;
+        }
+        this.broadcast(session.boardId, "worker", {
+          type: "session.user_message",
+          sessionId: msg.sessionId,
+          cardId: session.cardId,
+          text: lastUser.body,
         });
         break;
       }

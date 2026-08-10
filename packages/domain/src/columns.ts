@@ -3,18 +3,20 @@ import type { CardType, ColumnId } from "./types.js";
 export const COLUMN_ORDER: ColumnId[] = [
   "requirements",
   "design",
-  "split",
-  "verify",
   "dev",
   "test",
   "accept",
   "done",
 ];
 
+/** Legacy columns kept in the type union for migration; not shown on the board. */
+export const LEGACY_COLUMNS: readonly ColumnId[] = ["split", "verify"];
+
 const OCCUPANCY: Record<CardType, readonly ColumnId[]> = {
   requirement: ["requirements"],
-  // requirements = 主题组装区；进入设计后走 design→split→verify
-  epic: ["requirements", "design", "split", "verify"],
+  epic: ["requirements"],
+  // Design stays in design until related tasks are done, then may move to done.
+  design: ["design", "done"],
   task: ["dev", "test", "accept", "done"],
 };
 

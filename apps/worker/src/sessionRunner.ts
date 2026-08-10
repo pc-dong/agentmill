@@ -9,30 +9,45 @@ export type SessionUserMessage = {
   boardId: string;
 };
 
+/** In-flight chat streams keyed by sessionId — aborted on session.abort. */
+const activeControllers = new Map<string, AbortController>();
+
+export function abortSessionChat(sessionId: string): boolean {
+  const ctrl = activeControllers.get(sessionId);
+  if (!ctrl) return false;
+  ctrl.abort();
+  return true;
+}
+
 export async function handleSessionUserMessage(
   client: BoardClient,
   driver: AgentDriver,
   msg: SessionUserMessage,
   send: (out: WsClientOutMsg) => void,
 ): Promise<void> {
-  const board = await client.getBoard();
-  const card = await client.getCard(msg.cardId);
-  const session = await client.getSession(msg.sessionId);
-  const rawMessages = await client.listSessionMessages(msg.sessionId);
-
-  const history = rawMessages
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .slice(0, -1)
-    .map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.body,
-    }));
-
-  const employeeRole =
-    session.employeeRole ||
-    (card.type === "requirement" ? "ba" : "design");
+  // Replace any in-flight generation for this session.
+  abortSessionChat(msg.sessionId);
+  const controller = new AbortController();
+  activeControllers.set(msg.sessionId, controller);
 
   try {
+    const board = await client.getBoard();
+    const card = await client.getCard(msg.cardId);
+    const session = await client.getSession(msg.sessionId);
+    const rawMessages = await client.listSessionMessages(msg.sessionId);
+
+    const history = rawMessages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .slice(0, -1)
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.body,
+      }));
+
+    const employeeRole =
+      session.employeeRole ||
+      (card.type === "requirement" ? "ba" : "design");
+
     for await (const event of driver.chatStream({
       workspacePath: board.workspacePath,
       role: employeeRole,
@@ -40,6 +55,7 @@ export async function handleSessionUserMessage(
       boardId: msg.boardId,
       history,
       message: msg.text,
+      signal: controller.signal,
     })) {
       switch (event.type) {
         case "text_delta":
@@ -68,11 +84,23 @@ export async function handleSessionUserMessage(
       }
     }
   } catch (e) {
+    if (controller.signal.aborted) {
+      send({
+        type: "session.agent_done",
+        sessionId: msg.sessionId,
+        summary: "*(已打断)*",
+      });
+      return;
+    }
     const message = e instanceof Error ? e.message : String(e);
     send({
       type: "session.agent_error",
       sessionId: msg.sessionId,
       message,
     });
+  } finally {
+    if (activeControllers.get(msg.sessionId) === controller) {
+      activeControllers.delete(msg.sessionId);
+    }
   }
 }

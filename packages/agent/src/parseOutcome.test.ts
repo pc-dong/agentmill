@@ -20,6 +20,19 @@ describe("parseOutcome", () => {
     expect(o.tasks).toEqual([{ title: "Solo", description: "" }]);
   });
 
+  it("parses TASK with plan path", () => {
+    const o = parseOutcome(
+      "TASK A | do a | plan:docs/superpowers/plans/x.md",
+    );
+    expect(o.tasks).toEqual([
+      {
+        title: "A",
+        description: "do a",
+        planPath: "docs/superpowers/plans/x.md",
+      },
+    ]);
+  });
+
   it("ignores non-outcome lines", () => {
     const o = parseOutcome(
       "Some narrative\nTASK A | do a\nARTIFACT file docs/x.md label\nVERIFY fail",

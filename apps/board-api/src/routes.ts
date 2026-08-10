@@ -11,6 +11,8 @@ import {
 } from "@ai-workforce/domain";
 import type { BoardRepo } from "./repo.js";
 import type { SessionRepo } from "./sessions.js";
+import { listWorkspaceTree, readWorkspaceFile, readWorkspaceRaw } from "./workspaceFiles.js";
+import { scanWorkspaceSkills } from "./workspaceSkills.js";
 
 const mentionRe = /@(Design|Split|Verify|Dev|Test|Review|BA)\s*Bot/i;
 
@@ -37,6 +39,71 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     return c.json(board);
   });
 
+  app.get("/boards/:boardId/workspace-file", (c) => {
+    const board = repo.getBoard(c.req.param("boardId"));
+    if (!board) return c.json({ error: "not found" }, 404);
+    const rel = c.req.query("path") ?? "";
+    const result = readWorkspaceFile(board.workspacePath, rel);
+    if (!result.ok) {
+      return c.json({ error: result.error }, result.status);
+    }
+    return c.json({
+      path: result.path,
+      content: result.content,
+      language: result.language,
+    });
+  });
+
+  /**
+   * Path-style raw serve so relative links in HTML resolve under the same prefix.
+   * Example: /boards/:id/workspace-raw/docs/demo/index.html
+   */
+  app.get("/boards/:boardId/workspace-raw/*", (c) => {
+    const boardId = c.req.param("boardId");
+    const board = repo.getBoard(boardId);
+    if (!board) return c.json({ error: "not found" }, 404);
+    const prefix = `/boards/${boardId}/workspace-raw/`;
+    const fullPath = new URL(c.req.url).pathname;
+    const idx = fullPath.indexOf(prefix);
+    if (idx < 0) return c.json({ error: "path is required" }, 400);
+    const rel = decodeURIComponent(fullPath.slice(idx + prefix.length));
+    const result = readWorkspaceRaw(board.workspacePath, rel);
+    if (!result.ok) {
+      return c.json({ error: result.error }, result.status);
+    }
+    return new Response(new Uint8Array(result.body), {
+      status: 200,
+      headers: {
+        "content-type": result.contentType,
+        "cache-control": "no-store",
+      },
+    });
+  });
+
+  app.get("/boards/:boardId/workspace-tree", (c) => {
+    const board = repo.getBoard(c.req.param("boardId"));
+    if (!board) return c.json({ error: "not found" }, 404);
+    const root = c.req.query("root") ?? "";
+    const depthRaw = c.req.query("depth");
+    const depth = depthRaw ? Number(depthRaw) : 2;
+    const result = listWorkspaceTree(
+      board.workspacePath,
+      root,
+      Number.isFinite(depth) ? depth : 2,
+    );
+    if (!result.ok) {
+      return c.json({ error: result.error }, result.status);
+    }
+    return c.json({ root: result.root, files: result.files });
+  });
+
+  app.get("/boards/:boardId/workspace-skills", (c) => {
+    const board = repo.getBoard(c.req.param("boardId"));
+    if (!board) return c.json({ error: "not found" }, 404);
+    const skills = scanWorkspaceSkills(board.workspacePath);
+    return c.json({ skills });
+  });
+
   app.get("/boards/:boardId/cards", (c) => {
     return c.json(repo.listCards(c.req.param("boardId")));
   });
@@ -46,20 +113,31 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
     const body = z
       .object({
-        type: z.enum(["epic", "requirement", "task"]),
+        type: z.enum(["epic", "requirement", "design", "task"]),
         title: z.string().min(1),
         description: z.string().default(""),
         column: z.enum([
           "requirements",
           "design",
-          "split",
-          "verify",
           "dev",
           "test",
           "accept",
           "done",
         ]),
         epicId: z.string().nullable().optional(),
+        designId: z.string().nullable().optional(),
+        status: z.enum(["open", "in_progress", "done"]).optional(),
+        requirementIds: z.array(z.string()).optional(),
+        frozen: z.boolean().optional(),
+        artifacts: z
+          .array(
+            z.object({
+              kind: z.enum(["file", "url", "pr"]),
+              href: z.string().min(1),
+              label: z.string().optional(),
+            }),
+          )
+          .optional(),
       })
       .parse(await c.req.json());
     if (!isColumnAllowedForType(body.type as CardType, body.column as ColumnId)) {
@@ -69,6 +147,18 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
         },
         400,
       );
+    }
+    if (body.type === "design" && !body.epicId) {
+      return c.json({ error: "design card requires epicId" }, 400);
+    }
+    if (body.designId) {
+      const design = repo.getCard(body.designId);
+      if (!design || design.boardId !== boardId || design.type !== "design") {
+        return c.json(
+          { error: "designId must reference a design card on this board" },
+          400,
+        );
+      }
     }
     if (body.epicId) {
       const epic = repo.getCard(body.epicId);
@@ -83,8 +173,71 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       description: body.description,
       column: body.column as ColumnId,
       epicId: body.epicId,
+      designId: body.designId,
+      status: body.type === "requirement" ? (body.status ?? "open") : null,
+      frozen: body.frozen,
+      artifacts: body.artifacts,
     });
-    return c.json(card, 201);
+    if (body.type === "design" && body.requirementIds?.length) {
+      repo.linkDesignRequirements(card.id, body.requirementIds);
+    }
+    const out = repo.getCard(card.id)!;
+    if (out.type === "design") {
+      out.requirementIds = repo.listRequirementIdsForDesign(out.id);
+    }
+    return c.json(out, 201);
+  });
+
+  app.post("/boards/:boardId/design-rounds", async (c) => {
+    const boardId = c.req.param("boardId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    const body = z
+      .object({
+        epicId: z.string().min(1),
+        title: z.string().min(1).optional(),
+        description: z.string().optional(),
+        requirementIds: z.array(z.string()).min(1),
+      })
+      .parse(await c.req.json());
+    const epic = repo.getCard(body.epicId);
+    if (!epic || epic.boardId !== boardId || epic.type !== "epic") {
+      return c.json({ error: "epicId must reference an epic on this board" }, 400);
+    }
+    for (const rid of body.requirementIds) {
+      const req = repo.getCard(rid);
+      if (!req || req.boardId !== boardId || req.type !== "requirement") {
+        return c.json({ error: `invalid requirementId: ${rid}` }, 400);
+      }
+    }
+    const title =
+      body.title?.trim() ||
+      `${epic.title} · 设计 ${new Date().toISOString().slice(0, 10)}`;
+    const design = repo.createDesignRound({
+      boardId,
+      epicId: body.epicId,
+      title,
+      description: body.description ?? "",
+      requirementIds: body.requirementIds,
+    });
+    return c.json(design, 201);
+  });
+
+  app.get("/cards/:cardId/design-links", (c) => {
+    const card = repo.getCard(c.req.param("cardId"));
+    if (!card) return c.json({ error: "not found" }, 404);
+    if (card.type === "design") {
+      return c.json({
+        requirementIds: repo.listRequirementIdsForDesign(card.id),
+        designIds: [],
+      });
+    }
+    if (card.type === "requirement") {
+      return c.json({
+        requirementIds: [],
+        designIds: repo.listDesignIdsForRequirement(card.id),
+      });
+    }
+    return c.json({ requirementIds: [], designIds: [] });
   });
 
   app.patch("/cards/:cardId", async (c) => {
@@ -95,6 +248,17 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
         title: z.string().min(1).optional(),
         description: z.string().optional(),
         epicId: z.string().nullable().optional(),
+        status: z.enum(["open", "in_progress", "done"]).optional(),
+        frozen: z.boolean().optional(),
+        artifacts: z
+          .array(
+            z.object({
+              kind: z.enum(["file", "url", "pr"]),
+              href: z.string().min(1),
+              label: z.string().optional(),
+            }),
+          )
+          .optional(),
       })
       .parse(await c.req.json());
     if (body.epicId) {
@@ -106,12 +270,28 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     if (card.type === "epic" && body.epicId !== undefined) {
       return c.json({ error: "epic cannot link to another epic" }, 400);
     }
+    if (body.status !== undefined && card.type !== "requirement") {
+      return c.json({ error: "status only applies to requirement cards" }, 400);
+    }
     const updated = repo.updateCard(card.id, {
       ...(body.title !== undefined ? { title: body.title } : {}),
       ...(body.description !== undefined ? { description: body.description } : {}),
       ...(body.epicId !== undefined ? { epicId: body.epicId } : {}),
+      ...(body.status !== undefined ? { status: body.status } : {}),
+      ...(body.frozen !== undefined ? { frozen: body.frozen } : {}),
+      ...(body.artifacts !== undefined ? { artifacts: body.artifacts } : {}),
     });
     return c.json(updated);
+  });
+
+  app.delete("/cards/:cardId", (c) => {
+    const cardId = c.req.param("cardId");
+    const card = repo.getCard(cardId);
+    if (!card) return c.json({ error: "not found" }, 404);
+    if (!repo.deleteCard(cardId)) {
+      return c.json({ error: "cannot delete" }, 409);
+    }
+    return c.json({ ok: true, id: cardId });
   });
 
   app.post("/cards/:cardId/move", async (c) => {
@@ -150,6 +330,21 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       },
     );
     if (!result.ok) return c.json({ error: result.reason }, 400);
+    if (
+      card.type === "design" &&
+      body.to === "done" &&
+      body.actor === "human"
+    ) {
+      if (!repo.designTasksAllDone(card.id)) {
+        return c.json(
+          {
+            error:
+              "设计卡相关任务尚未全部 Done，请先完成拆分出的任务卡后再移入 Done",
+          },
+          400,
+        );
+      }
+    }
     const updated = repo.updateCard(card.id, {
       column: result.next.column,
       frozen: result.next.frozen,
@@ -352,20 +547,64 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     if (!card || card.boardId !== boardId) {
       return c.json({ error: "not found" }, 404);
     }
-    if (sessions.getOpenSessionForCard(cardId)) {
-      return c.json({ error: "open session exists" }, 409);
-    }
     const body = z
       .object({
         employeeRole: z.string().min(1).optional(),
       })
       .parse(await c.req.json().catch(() => ({})));
+    const existing = sessions.getOpenSessionForCard(cardId);
+    if (existing) {
+      // Resume the open session (UI refresh / double-click "开始" should not 409).
+      return c.json({ id: existing.id, resumed: true }, 200);
+    }
     const session = sessions.createSession({
       boardId,
       cardId,
       employeeRole: body.employeeRole ?? "design",
     });
-    return c.json({ id: session.id }, 201);
+    return c.json({ id: session.id, resumed: false }, 201);
+  });
+
+  app.get("/boards/:boardId/cards/:cardId/sessions/open", (c) => {
+    const boardId = c.req.param("boardId");
+    const cardId = c.req.param("cardId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    const card = repo.getCard(cardId);
+    if (!card || card.boardId !== boardId) {
+      return c.json({ error: "not found" }, 404);
+    }
+    const open = sessions.getOpenSessionForCard(cardId);
+    if (!open) return c.json({ error: "not found" }, 404);
+    return c.json(open);
+  });
+
+  app.get("/boards/:boardId/cards/:cardId/sessions/latest", (c) => {
+    const boardId = c.req.param("boardId");
+    const cardId = c.req.param("cardId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    const card = repo.getCard(cardId);
+    if (!card || card.boardId !== boardId) {
+      return c.json({ error: "not found" }, 404);
+    }
+    const role = c.req.query("role") || undefined;
+    const latest = sessions.getLatestSessionForCard(cardId, role);
+    if (!latest) return c.json({ error: "not found" }, 404);
+    let session = latest;
+    let messages = sessions.listMessages(session.id);
+
+    // Empty "new round" sessions should not hide prior clarification history.
+    if (messages.length === 0) {
+      const withMessages = sessions.getLatestSessionWithMessages(cardId, role);
+      if (withMessages && withMessages.id !== session.id) {
+        if (session.status === "open") {
+          sessions.closeSession(session.id);
+        }
+        session = withMessages;
+        messages = sessions.listMessages(session.id);
+      }
+    }
+
+    return c.json({ session, messages });
   });
 
   app.get("/sessions/:sessionId", (c) => {
@@ -380,10 +619,37 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     return c.json(sessions.listMessages(session.id));
   });
 
+  app.post("/sessions/:sessionId/edit-last-user", async (c) => {
+    const session = sessions.getSession(c.req.param("sessionId"));
+    if (!session) return c.json({ error: "not found" }, 404);
+    if (session.status !== "open") {
+      return c.json({ error: "session not open" }, 409);
+    }
+    const body = z
+      .object({ body: z.string().min(1) })
+      .parse(await c.req.json());
+    const messages = sessions.editLastUserMessage(session.id, body.body);
+    if (!messages) {
+      return c.json({ error: "no user message to edit" }, 409);
+    }
+    return c.json({ messages });
+  });
+
   app.post("/sessions/:sessionId/close", (c) => {
     const closed = sessions.closeSession(c.req.param("sessionId"));
     if (!closed) return c.json({ error: "cannot close" }, 409);
     return c.json(closed);
+  });
+
+  app.post("/sessions/:sessionId/reopen", (c) => {
+    const reopened = sessions.reopenSession(c.req.param("sessionId"));
+    if (!reopened) {
+      return c.json(
+        { error: "cannot reopen (not closed, or another session is open)" },
+        409,
+      );
+    }
+    return c.json(reopened);
   });
 
   app.post("/sessions/:sessionId/settle", async (c) => {
@@ -574,6 +840,51 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       employeeId: ba.id,
       trigger: body.kind,
       payload: body.summary,
+    });
+    return c.json({ job });
+  });
+
+  app.post("/cards/:cardId/design-jobs", async (c) => {
+    const card = repo.getCard(c.req.param("cardId"));
+    if (!card) return c.json({ error: "not found" }, 404);
+    if (card.type !== "design") {
+      return c.json({ error: "design-jobs only apply to design cards" }, 400);
+    }
+    if (card.column !== "design") {
+      return c.json(
+        { error: "split/verify/deep_dive require design card in design column" },
+        400,
+      );
+    }
+    const body = z
+      .object({
+        kind: z.enum(["deep_dive", "split", "verify"]),
+        summary: z.string().min(1).optional(),
+      })
+      .parse(await c.req.json());
+
+    const role =
+      body.kind === "deep_dive"
+        ? "design"
+        : body.kind === "split"
+          ? "split"
+          : "verify";
+    const emp = repo.listEmployees(card.boardId).find((e) => e.role === role);
+    if (!emp) return c.json({ error: `${role} employee not found` }, 404);
+
+    const defaultSummary =
+      body.kind === "split"
+        ? `Split design card "${card.title}" into implementation tasks using writing-plans skill.`
+        : body.kind === "verify"
+          ? `Verify task coverage for design card "${card.title}".`
+          : `Deep dive design for: ${card.title}`;
+
+    const job = repo.createJob({
+      boardId: card.boardId,
+      cardId: card.id,
+      employeeId: emp.id,
+      trigger: body.kind === "deep_dive" ? "deep_dive" : "mention",
+      payload: body.summary?.trim() || defaultSummary,
     });
     return c.json({ job });
   });

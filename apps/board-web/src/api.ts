@@ -15,17 +15,24 @@ export type ArtifactHint = {
   label?: string;
 };
 
+export type RequirementStatus = "open" | "in_progress" | "done";
+
 export type Card = {
   id: string;
   boardId: string;
-  type: "epic" | "requirement" | "task";
+  type: "epic" | "requirement" | "design" | "task";
   title: string;
   description: string;
   column: string;
   epicId: string | null;
+  designId?: string | null;
   reworkCount: number;
   frozen: boolean;
   artifacts: ArtifactHint[];
+  /** Requirement coarse status; null/undefined for other types. */
+  status?: RequirementStatus | null;
+  /** Populated for design cards. */
+  requirementIds?: string[];
 };
 
 export type SessionMessage = {
@@ -56,6 +63,8 @@ export const api = {
       description?: string;
       column: string;
       epicId?: string | null;
+      status?: RequirementStatus;
+      requirementIds?: string[];
     },
   ) =>
     json<Card>(
@@ -65,12 +74,33 @@ export const api = {
         body: JSON.stringify(body),
       }),
     ),
+  createDesignRound: (
+    boardId: string,
+    body: {
+      epicId: string;
+      title?: string;
+      description?: string;
+      requirementIds: string[];
+    },
+  ) =>
+    json<Card>(
+      fetch(`${base}/boards/${boardId}/design-rounds`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    ),
+  getDesignLinks: (cardId: string) =>
+    json<{ requirementIds: string[]; designIds: string[] }>(
+      fetch(`${base}/cards/${cardId}/design-links`),
+    ),
   updateCard: (
     cardId: string,
     body: {
       title?: string;
       description?: string;
       epicId?: string | null;
+      status?: RequirementStatus;
     },
   ) =>
     json<Card>(
@@ -79,6 +109,10 @@ export const api = {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       }),
+    ),
+  deleteCard: (cardId: string) =>
+    json<{ ok: true; id: string }>(
+      fetch(`${base}/cards/${cardId}`, { method: "DELETE" }),
     ),
   listEmployees: (boardId: string) =>
     json<
@@ -124,15 +158,51 @@ export const api = {
       }),
     ),
   createSession: (boardId: string, cardId: string, employeeRole = "design") =>
-    json<{ id: string }>(
+    json<{ id: string; resumed?: boolean }>(
       fetch(`${base}/boards/${boardId}/cards/${cardId}/sessions`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ employeeRole }),
       }),
     ),
+  getLatestSession: (boardId: string, cardId: string, role?: string) =>
+    fetch(
+      `${base}/boards/${boardId}/cards/${cardId}/sessions/latest${
+        role ? `?role=${encodeURIComponent(role)}` : ""
+      }`,
+    ).then(async (res) => {
+      if (res.status === 404) return null;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          (err as { error?: string }).error ?? res.statusText,
+        );
+      }
+      return res.json() as Promise<{
+        session: {
+          id: string;
+          status: "open" | "closed";
+          employeeRole: string;
+        };
+        messages: SessionMessage[];
+      }>;
+    }),
   listSessionMessages: (sessionId: string) =>
     json<SessionMessage[]>(fetch(`${base}/sessions/${sessionId}/messages`)),
+  editLastUserMessage: (sessionId: string, body: string) =>
+    json<{ messages: SessionMessage[] }>(
+      fetch(`${base}/sessions/${sessionId}/edit-last-user`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body }),
+      }),
+    ),
+  closeSession: (sessionId: string) =>
+    json(fetch(`${base}/sessions/${sessionId}/close`, { method: "POST" })),
+  reopenSession: (sessionId: string) =>
+    json<{ id: string; status: "open" | "closed" }>(
+      fetch(`${base}/sessions/${sessionId}/reopen`, { method: "POST" }),
+    ),
   settleSession: (
     sessionId: string,
     body: { artifacts?: ArtifactHint[]; comment?: string },
@@ -155,4 +225,47 @@ export const api = {
         body: JSON.stringify(body),
       }),
     ),
+  createDesignJob: (
+    cardId: string,
+    body: { kind: "deep_dive" | "split" | "verify"; summary?: string },
+  ) =>
+    json<{ job: { id: string } }>(
+      fetch(`${base}/cards/${cardId}/design-jobs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    ),
+  getWorkspaceFile: (boardId: string, filePath: string) =>
+    json<{ path: string; content: string; language: string }>(
+      fetch(
+        `${base}/boards/${boardId}/workspace-file?path=${encodeURIComponent(filePath)}`,
+      ),
+    ),
+  /** URL for opening a workspace file (e.g. HTML) in a new browser tab. */
+  workspaceRawUrl: (boardId: string, filePath: string) => {
+    const encoded = filePath
+      .replace(/\\/g, "/")
+      .split("/")
+      .filter(Boolean)
+      .map(encodeURIComponent)
+      .join("/");
+    return `${base}/boards/${boardId}/workspace-raw/${encoded}`;
+  },
+  listWorkspaceTree: (boardId: string, root: string, depth = 2) =>
+    json<{ root: string; files: Array<{ path: string; name: string }> }>(
+      fetch(
+        `${base}/boards/${boardId}/workspace-tree?root=${encodeURIComponent(root)}&depth=${depth}`,
+      ),
+    ),
+  listWorkspaceSkills: (boardId: string) =>
+    json<{
+      skills: Array<{
+        name: string;
+        description: string;
+        path: string;
+        kind: "skill" | "command";
+        source: string;
+      }>;
+    }>(fetch(`${base}/boards/${boardId}/workspace-skills`)),
 };

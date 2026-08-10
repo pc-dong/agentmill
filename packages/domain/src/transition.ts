@@ -12,7 +12,7 @@ export type MoveResult =
   | { ok: false; reason: string };
 
 const HUMAN_GATES: ReadonlyArray<readonly [ColumnId, ColumnId]> = [
-  ["design", "split"],
+  ["design", "done"],
   ["accept", "done"],
 ];
 

@@ -125,6 +125,43 @@ describe("WsHub", () => {
     expect(payload.text).toBe("align on theme");
   });
 
+  it("forwards session.abort to workers without persisting", () => {
+    const { hub, sessions, boardId, sessionId } = tempHub();
+    const worker = createMockWs();
+    hub.subscribe(worker, { role: "worker", boardId });
+
+    hub.handleMessage(
+      createMockWs(),
+      JSON.stringify({ type: "session.abort", sessionId }),
+    );
+
+    expect(sessions.listMessages(sessionId)).toHaveLength(0);
+    expect(worker.sent).toHaveLength(1);
+    expect(JSON.parse(worker.sent[0]!).type).toBe("session.abort");
+  });
+
+  it("session.retry forwards last user text without appending", () => {
+    const { hub, sessions, boardId, sessionId } = tempHub();
+    const worker = createMockWs();
+    hub.subscribe(worker, { role: "worker", boardId });
+    sessions.appendMessage({
+      sessionId,
+      role: "user",
+      body: "retry me",
+    });
+
+    hub.handleMessage(
+      createMockWs(),
+      JSON.stringify({ type: "session.retry", sessionId }),
+    );
+
+    expect(sessions.listMessages(sessionId)).toHaveLength(1);
+    expect(worker.sent).toHaveLength(1);
+    const payload = JSON.parse(worker.sent[0]!);
+    expect(payload.type).toBe("session.user_message");
+    expect(payload.text).toBe("retry me");
+  });
+
   it("unsubscribes on close", () => {
     const { hub, boardId } = tempHub();
     const ui = createMockWs();

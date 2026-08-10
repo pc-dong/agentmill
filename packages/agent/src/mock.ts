@@ -46,9 +46,9 @@ export class MockDriver implements AgentDriver {
     } else if (input.role === "split") {
       summary = [
         `Mock ${input.role} completed for card ${input.cardId}.`,
-        "TASK A | do a",
-        "TASK B | do b",
-        "ARTIFACT file docs/aiw/breakdown.md Breakdown",
+        "ARTIFACT file docs/superpowers/plans/2026-08-07-mock-plan.md Plan",
+        "TASK A | do a | plan:docs/superpowers/plans/2026-08-07-mock-plan.md",
+        "TASK B | do b | plan:docs/superpowers/plans/2026-08-07-mock-plan.md",
       ].join("\n");
     } else if (input.role === "verify") {
       summary = [
@@ -83,8 +83,30 @@ export class MockDriver implements AgentDriver {
 
   async *chatStream(input: ChatInput): AsyncIterable<AgentEvent> {
     const chunks = ["Mock ", "chat ", "for ", `card ${input.cardId}.`];
+    let partial = "";
     for (const text of chunks) {
+      if (input.signal?.aborted) {
+        yield {
+          type: "done",
+          summary: partial.trim()
+            ? `${partial.trim()}\n\n*(已打断)*`
+            : "*(已打断)*",
+        };
+        return;
+      }
+      partial += text;
       yield { type: "text_delta", text };
+      await new Promise((r) => setTimeout(r, 5));
+    }
+
+    if (input.signal?.aborted) {
+      yield {
+        type: "done",
+        summary: partial.trim()
+          ? `${partial.trim()}\n\n*(已打断)*`
+          : "*(已打断)*",
+      };
+      return;
     }
 
     let summary: string;

@@ -21,6 +21,7 @@ export type Card = {
   description: string;
   column: string;
   epicId: string | null;
+  designId?: string | null;
   reworkCount: number;
   frozen: boolean;
   lockedJobId: string | null;
@@ -120,17 +121,42 @@ export class BoardClient {
   }
 
   async createCard(input: {
-    type: "epic" | "requirement" | "task";
+    type: "epic" | "requirement" | "design" | "task";
     title: string;
     description?: string;
     column: string;
     epicId?: string | null;
+    designId?: string | null;
+    frozen?: boolean;
+    artifacts?: Array<{ kind: string; href: string; label?: string }>;
   }): Promise<Card> {
     return this.postJson<Card>(`/boards/${this.opts.boardId}/cards`, {
       description: "",
       epicId: null,
       ...input,
     });
+  }
+
+  async updateCard(
+    cardId: string,
+    patch: {
+      title?: string;
+      description?: string;
+      epicId?: string | null;
+      frozen?: boolean;
+      artifacts?: Array<{ kind: string; href: string; label?: string }>;
+    },
+  ): Promise<Card> {
+    const res = await fetch(`${this.opts.apiBase}/cards/${cardId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `update failed: ${res.status}`);
+    }
+    return (await res.json()) as Card;
   }
 
   async moveCard(

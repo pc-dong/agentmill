@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type Card } from "./api";
 import { BoardView } from "./BoardView";
 import { CardDrawer } from "./CardDrawer";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 const BOARD_KEY = "aiw.boardId";
 
@@ -16,6 +17,9 @@ export function App() {
   );
   const [title, setTitle] = useState("");
   const [epicIdForReq, setEpicIdForReq] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<Card | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const epics = useMemo(
     () => cards.filter((c) => c.type === "epic"),
@@ -34,6 +38,22 @@ export function App() {
   useEffect(() => {
     refresh().catch(console.error);
   }, [boardId]);
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteCard(pendingDelete.id);
+      if (selected?.id === pendingDelete.id) setSelected(null);
+      setPendingDelete(null);
+      await refresh();
+    } catch (e) {
+      setDeleteError(String(e));
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   if (!boardId) {
     return (
@@ -137,14 +157,63 @@ export function App() {
           刷新
         </button>
       </header>
-      <BoardView cards={cards} onOpen={setSelected} />
+      <BoardView
+        cards={cards}
+        onOpen={setSelected}
+        onMove={async (card, to, opts) => {
+          await api.moveCard(card.id, {
+            to,
+            actor: "human",
+            humanApproved: opts?.humanApproved,
+          });
+          await refresh();
+        }}
+        onRequestDelete={(card) => {
+          setDeleteError(null);
+          setPendingDelete(card);
+        }}
+      />
       {selected && (
         <CardDrawer
           card={selected}
           cards={cards}
           onClose={() => setSelected(null)}
           onChanged={refresh}
+          onRequestDelete={() => {
+            setDeleteError(null);
+            setPendingDelete(selected);
+          }}
         />
+      )}
+      {pendingDelete && (
+        <ConfirmDialog
+          title="确认删除卡片"
+          message={`确定删除「${pendingDelete.title}」吗？评论与会话将一并删除，且不可恢复。`}
+          confirmLabel="确认删除"
+          cancelLabel="取消"
+          danger
+          busy={deleting}
+          onCancel={() => {
+            if (deleting) return;
+            setPendingDelete(null);
+            setDeleteError(null);
+          }}
+          onConfirm={() => {
+            void confirmDelete();
+          }}
+        />
+      )}
+      {deleteError && (
+        <p className="board-error" role="alert">
+          {deleteError}
+          <button
+            type="button"
+            className="linkish"
+            onClick={() => setDeleteError(null)}
+          >
+            关闭
+          </button>
+        </p>
       )}
     </div>
   );

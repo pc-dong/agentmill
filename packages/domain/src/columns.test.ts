@@ -2,12 +2,10 @@ import { describe, expect, it } from "vitest";
 import { COLUMN_ORDER, isColumnAllowedForType } from "./columns.js";
 
 describe("COLUMN_ORDER", () => {
-  it("matches the eight delivery columns", () => {
+  it("lists delivery columns without split/verify", () => {
     expect(COLUMN_ORDER).toEqual([
       "requirements",
       "design",
-      "split",
-      "verify",
       "dev",
       "test",
       "accept",
@@ -17,24 +15,27 @@ describe("COLUMN_ORDER", () => {
 });
 
 describe("isColumnAllowedForType", () => {
-  it("keeps requirements in requirements column only", () => {
+  it("keeps requirement in requirements only", () => {
     expect(isColumnAllowedForType("requirement", "requirements")).toBe(true);
     expect(isColumnAllowedForType("requirement", "design")).toBe(false);
-    expect(isColumnAllowedForType("requirement", "dev")).toBe(false);
   });
 
-  it("allows epic in requirements plus design/split/verify", () => {
+  it("keeps epic in requirements only", () => {
     expect(isColumnAllowedForType("epic", "requirements")).toBe(true);
-    expect(isColumnAllowedForType("epic", "design")).toBe(true);
-    expect(isColumnAllowedForType("epic", "split")).toBe(true);
-    expect(isColumnAllowedForType("epic", "verify")).toBe(true);
-    expect(isColumnAllowedForType("epic", "dev")).toBe(false);
+    expect(isColumnAllowedForType("epic", "design")).toBe(false);
+    expect(isColumnAllowedForType("epic", "done")).toBe(false);
   });
 
-  it("keeps task in dev/test/accept/done only", () => {
+  it("allows design cards in design and done", () => {
+    expect(isColumnAllowedForType("design", "design")).toBe(true);
+    expect(isColumnAllowedForType("design", "done")).toBe(true);
+    expect(isColumnAllowedForType("design", "split")).toBe(false);
+    expect(isColumnAllowedForType("design", "verify")).toBe(false);
+    expect(isColumnAllowedForType("design", "dev")).toBe(false);
+  });
+
+  it("allows task in delivery columns", () => {
     expect(isColumnAllowedForType("task", "dev")).toBe(true);
-    expect(isColumnAllowedForType("task", "test")).toBe(true);
-    expect(isColumnAllowedForType("task", "accept")).toBe(true);
     expect(isColumnAllowedForType("task", "done")).toBe(true);
     expect(isColumnAllowedForType("task", "design")).toBe(false);
   });

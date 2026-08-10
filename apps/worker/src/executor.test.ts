@@ -102,14 +102,15 @@ describe("executeClaimedJob", () => {
     const completeJob = vi.fn(async () => {});
     const client = fakeClient({ createCard, moveCard, completeJob });
     client.getCard = async () => ({
-      id: "epic1",
-      type: "epic",
-      title: "Epic",
+      id: "design1",
+      type: "design",
+      title: "Design round",
       description: "",
-      column: "split",
-      epicId: null,
+      column: "design",
+      epicId: "epic1",
       frozen: false,
       artifacts: [],
+      requirementIds: ["r1"],
     });
     client.getEmployee = async () => ({
       id: "e-split",
@@ -117,6 +118,13 @@ describe("executeClaimedJob", () => {
       displayName: "Split Bot",
     });
     client.listCards = async () => [
+      {
+        id: "design1",
+        type: "design",
+        epicId: "epic1",
+        title: "Design round",
+        requirementIds: ["r1"],
+      },
       { id: "r1", type: "requirement", epicId: "epic1", title: "Req A" },
     ];
 
@@ -125,8 +133,11 @@ describe("executeClaimedJob", () => {
       displayName: "Split",
       oneshot: async () => ({
         status: "ok",
-        summary: "TASK A | do a\nARTIFACT file x.md X",
-        artifacts: [{ kind: "file", href: "x.md", label: "X" }],
+        summary:
+          "ARTIFACT file docs/superpowers/plans/p.md Plan\nTASK A | do a | plan:docs/superpowers/plans/p.md",
+        artifacts: [
+          { kind: "file", href: "docs/superpowers/plans/p.md", label: "Plan" },
+        ],
       }),
       chatStream: async function* () {},
     };
@@ -134,7 +145,7 @@ describe("executeClaimedJob", () => {
     await executeClaimedJob(client as never, driver, job);
     expect(completeJob).toHaveBeenCalledOnce();
     expect(createCard).toHaveBeenCalledOnce();
-    expect(moveCard).toHaveBeenCalledWith("epic1", "verify", "bot");
+    expect(moveCard).not.toHaveBeenCalled();
   });
 
   it("does not failJob when applyRoleOutcome throws after completeJob", async () => {
@@ -240,6 +251,14 @@ describe("executeClaimedJob", () => {
           epicKey: "E-DEMO-001",
           epicTitle: "Login theme",
           epicSlug: "login",
+          artifacts: expect.arrayContaining([
+            expect.objectContaining({
+              href: "docs/epics/E-DEMO-001-login/EPIC.md",
+            }),
+            expect.objectContaining({
+              href: "docs/epics/E-DEMO-001-login/prds/P-001-01-oauth.md",
+            }),
+          ]),
         }),
       );
       expect(completeJob).toHaveBeenCalledOnce();
@@ -313,6 +332,58 @@ describe("executeClaimedJob", () => {
         "bot",
         expect.stringContaining("deep dive"),
       );
+    });
+
+    it("design deep_dive oneshots with design role not baDeepDive", async () => {
+      const baSettle = vi.fn(async () => ({}));
+      const completeJob = vi.fn(async () => {});
+      const postComment = vi.fn(async () => {});
+      const oneshot = vi.fn(async (input: { role: string; prompt: string }) => ({
+        status: "ok" as const,
+        summary: `design dive\nARTIFACT file docs/aiw/d.md D`,
+        artifacts: [{ kind: "file" as const, href: "docs/aiw/d.md", label: "D" }],
+      }));
+
+      const client = fakeClient({
+        baSettle,
+        completeJob,
+        postComment,
+        getCard: vi.fn(async () => ({
+          id: "design1",
+          type: "design",
+          title: "Design round",
+          description: "",
+          column: "design",
+          epicId: "epic1",
+          frozen: false,
+          artifacts: [],
+        })),
+        getEmployee: vi.fn(async () => ({
+          id: "e-design",
+          role: "design",
+          displayName: "Design Bot",
+        })),
+      });
+
+      await executeClaimedJob(
+        client as never,
+        { id: "mock", displayName: "Mock", oneshot, chatStream: async function* () {} },
+        {
+          ...job,
+          cardId: "design1",
+          employeeId: "e-design",
+          trigger: "deep_dive",
+          payload: "user: need API design",
+        },
+      );
+
+      expect(oneshot).toHaveBeenCalledOnce();
+      expect(oneshot.mock.calls[0]![0].role).toBe("design");
+      expect(oneshot.mock.calls[0]![0].prompt).toContain("user: need API design");
+      expect(baSettle).not.toHaveBeenCalled();
+      expect(completeJob).toHaveBeenCalledOnce();
+      // design path is not BA — should not only postComment and skip outcomes
+      // design outcome is no-op; postComment not required for design deep_dive
     });
 
     it("settle force-link fails when protocol epicId mismatches linked epic", async () => {

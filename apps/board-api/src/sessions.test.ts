@@ -112,7 +112,7 @@ describe("SessionRepo", () => {
     expect(sessions.listOpenSessionCardIds(b.id)).toEqual([]);
   });
 
-  it("defaults employeeRole to design", () => {
+  it("editLastUserMessage updates body and truncates following messages", () => {
     const { board, sessions } = tempRepos();
     const b = board.createBoard({ name: "D", workspacePath: "/tmp/w" });
     const card = board.createCard({
@@ -126,6 +126,54 @@ describe("SessionRepo", () => {
       boardId: b.id,
       cardId: card.id,
     });
-    expect(session.employeeRole).toBe("design");
+
+    sessions.appendMessage({
+      sessionId: session.id,
+      role: "user",
+      body: "first",
+    });
+    sessions.appendMessage({
+      sessionId: session.id,
+      role: "assistant",
+      body: "reply1",
+    });
+    sessions.appendMessage({
+      sessionId: session.id,
+      role: "user",
+      body: "second",
+    });
+    sessions.appendMessage({
+      sessionId: session.id,
+      role: "assistant",
+      body: "reply2",
+    });
+
+    const remaining = sessions.editLastUserMessage(session.id, "second edited");
+    expect(remaining).toHaveLength(3);
+    expect(remaining?.[2]?.role).toBe("user");
+    expect(remaining?.[2]?.body).toBe("second edited");
+    expect(sessions.listMessages(session.id)).toHaveLength(3);
+  });
+
+  it("reopenSession reopens a closed session", () => {
+    const { board, sessions } = tempRepos();
+    const b = board.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const card = board.createCard({
+      boardId: b.id,
+      type: "epic",
+      title: "E",
+      column: "design",
+      description: "",
+    });
+    const session = sessions.createSession({
+      boardId: b.id,
+      cardId: card.id,
+    });
+    sessions.closeSession(session.id);
+    expect(sessions.getOpenSessionForCard(card.id)).toBeNull();
+
+    const reopened = sessions.reopenSession(session.id);
+    expect(reopened?.status).toBe("open");
+    expect(sessions.getOpenSessionForCard(card.id)?.id).toBe(session.id);
   });
 });

@@ -82,8 +82,21 @@ export class CursorDriver implements AgentDriver {
 
   async *chatStream(input: ChatInput): AsyncIterable<AgentEvent> {
     let agent: Awaited<ReturnType<typeof Agent.create>> | undefined;
+    let run: Awaited<ReturnType<NonNullable<typeof agent>["send"]>> | undefined;
+
+    const onAbort = () => {
+      if (run) {
+        void run.cancel().catch(() => undefined);
+      }
+    };
+    input.signal?.addEventListener("abort", onAbort);
 
     try {
+      if (input.signal?.aborted) {
+        yield { type: "done", summary: "*(已打断)*" };
+        return;
+      }
+
       agent = await Agent.create({
         apiKey: this.opts.apiKey,
         model: { id: this.opts.modelId },
@@ -91,10 +104,17 @@ export class CursorDriver implements AgentDriver {
       });
 
       const composedPrompt = composeChatPrompt(input);
-      const run = await agent.send(composedPrompt);
+      run = await agent.send(composedPrompt);
       let fullText = "";
 
       for await (const event of run.stream()) {
+        if (input.signal?.aborted) {
+          const summary = fullText.trim()
+            ? `${fullText.trim()}\n\n*(已打断)*`
+            : "*(已打断)*";
+          yield { type: "done", summary };
+          return;
+        }
         if (event.type !== "assistant") continue;
         const text = assistantTextFromMessage(event);
         if (!text) continue;
@@ -102,11 +122,24 @@ export class CursorDriver implements AgentDriver {
         yield { type: "text_delta", text };
       }
 
+      if (input.signal?.aborted) {
+        const summary = fullText.trim()
+          ? `${fullText.trim()}\n\n*(已打断)*`
+          : "*(已打断)*";
+        yield { type: "done", summary };
+        return;
+      }
+
       yield { type: "done", summary: fullText };
     } catch (e) {
+      if (input.signal?.aborted) {
+        yield { type: "done", summary: "*(已打断)*" };
+        return;
+      }
       const message = e instanceof Error ? e.message : String(e);
       yield { type: "error", message };
     } finally {
+      input.signal?.removeEventListener("abort", onAbort);
       if (agent) {
         await agent[Symbol.asyncDispose]();
       }

@@ -17,13 +17,26 @@ export type BaSettleProtocol = {
 
 const ARTIFACT_LINE =
   /^ARTIFACT\s+(file|url|pr)\s+(\S+)(?:\s+(.+))?$/i;
-const MODE_RE = /^EPIC_MODE\s+(create|link)$/i;
-const EPIC_ID_RE = /^EPIC_ID\s+(\S+)$/i;
-const EPIC_SLUG_RE = /^EPIC_SLUG\s+(\S+)$/i;
+const MODE_RE = /^EPIC_MODE\s+(create|link)\b/i;
+const EPIC_ID_RE = /^EPIC_ID\s+(\S+)/i;
+const EPIC_SLUG_RE = /^EPIC_SLUG\s+(\S+)/i;
 const EPIC_TITLE_RE = /^EPIC_TITLE\s+(.+)$/i;
-const PRD_ID_RE = /^PRD_ID\s+(\S+)$/i;
-const PRD_SLUG_RE = /^PRD_SLUG\s+(\S+)$/i;
+const PRD_ID_RE = /^PRD_ID\s+(\S+)/i;
+const PRD_SLUG_RE = /^PRD_SLUG\s+(\S+)/i;
 const PRD_TITLE_RE = /^PRD_TITLE\s+(.+)$/i;
+
+/** Strip markdown bullets/backticks/colons so models' slight formatting still parses. */
+export function normalizeProtocolLine(raw: string): string {
+  let line = raw.trim();
+  if (!line || /^```/.test(line)) return "";
+  line = line.replace(/^[-*•]\s+/, "").replace(/^\d+[.)]\s+/, "");
+  line = line.replace(/^`+/, "").replace(/`+$/, "").trim();
+  line = line.replace(
+    /^(EPIC_MODE|EPIC_ID|EPIC_SLUG|EPIC_TITLE|PRD_ID|PRD_SLUG|PRD_TITLE|ARTIFACT)\s*[:：]\s*/i,
+    "$1 ",
+  );
+  return line;
+}
 
 function parseArtifactHints(text: string): ArtifactHint[] {
   const out: ArtifactHint[] = [];
@@ -54,10 +67,13 @@ export function parseBaSettle(
   let prdSlug: string | undefined;
   let prdTitle: string | undefined;
 
-  for (const raw of summary.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line) continue;
+  const normalized = summary
+    .split(/\r?\n/)
+    .map(normalizeProtocolLine)
+    .filter(Boolean)
+    .join("\n");
 
+  for (const line of normalized.split("\n")) {
     let m = line.match(MODE_RE);
     if (m) {
       mode = m[1]!.toLowerCase() as "create" | "link";
@@ -103,7 +119,7 @@ export function parseBaSettle(
   if (!prdSlug) return { error: "missing PRD_SLUG" };
   if (!prdTitle) return { error: "missing PRD_TITLE" };
 
-  const artifacts = parseArtifactHints(summary);
+  const artifacts = parseArtifactHints(normalized);
   const fileArtifacts = artifacts.filter((a) => a.kind === "file");
 
   if (mode === "create") {

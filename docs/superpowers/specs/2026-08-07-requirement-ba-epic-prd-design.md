@@ -11,7 +11,7 @@
 
 ### 1.1 问题
 
-AI Workforce 看板在 **设计列 Epic** 上已有 DesignChat（流式澄清 + 沉淀 ArtifactRef），但 **需求列 requirement 卡** 仅有标题/关联/评论 `@`，无法：
+AI Workforce 看板在 **设计列的设计卡（`type=design`）** 上已有 DesignChat（流式澄清 + 沉淀 ArtifactRef），但 **需求列 requirement 卡** 仅有标题/关联/评论 `@`，无法：
 
 - 与 AI 多轮澄清需求  
 - 按 Marriott 风格产出 `EPIC.md` / `shared-context.md` / `prds/*.md`  
@@ -164,7 +164,7 @@ Human[沉淀] → API(创建 settle Job 或标记 session)
 | 目标文件已存在 | MVP：覆盖并审计评论注明；不做版本树 |
 | BA 扫列 | 可创建澄清提醒 Job；**不得**自动改列或自动沉淀 |
 
-BA **不**推动设计→拆分门禁；设计仍由 Epic 在设计列 + Design Bot 负责。
+BA **不**推动设计→拆分门禁；设计仍由 **设计卡** 在设计列 + Design Bot 负责。BA 沉淀只建/挂 Epic + PRD，**不**自动创建设计卡。
 
 ---
 
@@ -175,9 +175,12 @@ BA **不**推动设计→拆分门禁；设计仍由 Epic 在设计列 + Design 
 1. 关联状态：未挂 →「将新建 Epic + PRD」；已挂 →「将写入 Epic《标题》下的 PRD」  
 2. 流式对话（Session/WS）  
 3. 发送 / **沉淀** / **在 Cursor 中深挖**  
-4. 已有 artifacts 列表可点击打开相对路径提示（MVP 纯文本即可）
+4. 已有 artifacts 列表可点击打开相对路径提示（MVP 纯文本即可）  
+5. 粗状态选择（open / in_progress / done）与派生徽章；已挂 Epic 时可 **开一轮设计**（预勾本需求）
 
-Epic 卡侧栏：设计列仍用 DesignChat；需求列 Epic 仅组装与「进入设计」，**不**放 BA 澄清（BA 挂在 requirement 上）。
+Epic 卡侧栏（固定需求列）：**开一轮设计**（勾选 open/in_progress 需求 → 创建设计卡），**不**放 BA 澄清（BA 挂在 requirement 上），**不**再「进入设计列」。
+
+设计卡侧栏（设计列）：DesignChat + 人批设计→拆分。
 
 ---
 
@@ -207,6 +210,6 @@ Epic 卡侧栏：设计列仍用 DesignChat；需求列 Epic 仅组装与「进�
 
 修订理解（不改主规格八列结构）：
 
-- 需求列执行者补充：**人 + BA Bot**（澄清与文档 Draft）。  
-- 出门规则不变：人归拢需求后，将 **Epic 主题卡** 移入设计列。  
-- 设计列 DesignChat 继续负责设计方案文档；BA 产出的是 **Epic/PRD 需求规格**，不是技术方案。
+- 需求列执行者补充：**人 + BA Bot**（澄清与文档 Draft）；Epic 固定本列。  
+- 出门规则：人归拢需求后，在 Epic/需求侧栏 **开一轮设计** → 创建设计卡进设计列（而非移动 Epic）。  
+- 设计列 DesignChat 挂在 **设计卡** 上，负责设计方案文档；BA 产出的是 **Epic/PRD 需求规格**，不是技术方案。

@@ -78,6 +78,33 @@ describe("handleSessionUserMessage", () => {
     });
   });
 
+  it("passes AbortSignal into chatStream", async () => {
+    let seenSignal: AbortSignal | undefined;
+    const driver: AgentDriver = {
+      id: "mock",
+      displayName: "Mock",
+      oneshot: async () => ({ status: "ok", summary: "", artifacts: [] }),
+      chatStream: async function* (input) {
+        seenSignal = input.signal;
+        yield { type: "done", summary: "ok" };
+      },
+    };
+
+    await handleSessionUserMessage(
+      fakeClient() as never,
+      driver,
+      {
+        sessionId: "s-abort-signal",
+        cardId: "c1",
+        text: "hello",
+        boardId: "b1",
+      },
+      vi.fn(),
+    );
+
+    expect(seenSignal).toBeInstanceOf(AbortSignal);
+  });
+
   it("passes session employeeRole into chatStream", async () => {
     let seenRole: string | undefined;
     const driver: AgentDriver = {

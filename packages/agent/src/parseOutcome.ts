@@ -1,11 +1,15 @@
-export type ParsedTask = { title: string; description: string };
+export type ParsedTask = {
+  title: string;
+  description: string;
+  planPath?: string;
+};
 export type ParsedOutcome = {
   tasks: ParsedTask[];
   verify?: "pass" | "fail";
   test?: "pass" | "fail";
 };
 
-const TASK_LINE = /^TASK\s+(.+?)\s+\|\s*(.*)$/;
+const TASK_LINE = /^TASK\s+(.+)$/i;
 const VERIFY_LINE = /^VERIFY\s+(pass|fail)$/i;
 const TEST_LINE = /^TEST\s+(pass|fail)$/i;
 
@@ -18,10 +22,24 @@ export function parseOutcome(summary: string): ParsedOutcome {
 
     const taskMatch = line.match(TASK_LINE);
     if (taskMatch) {
-      outcome.tasks.push({
-        title: taskMatch[1]!.trim(),
-        description: taskMatch[2]!.trim(),
-      });
+      const rest = taskMatch[1]!.trim();
+      const parts = rest.split("|").map((p) => p.trim());
+      const title = parts[0] ?? "";
+      if (!title) continue;
+      let description = "";
+      let planPath: string | undefined;
+      for (let i = 1; i < parts.length; i++) {
+        const p = parts[i]!;
+        const plan = p.match(/^plan:(.+)$/i);
+        if (plan) {
+          planPath = plan[1]!.trim();
+        } else if (!description) {
+          description = p;
+        } else {
+          description = `${description} | ${p}`;
+        }
+      }
+      outcome.tasks.push({ title, description, planPath });
       continue;
     }
 

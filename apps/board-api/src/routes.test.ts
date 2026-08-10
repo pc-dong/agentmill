@@ -31,8 +31,8 @@ function appWithRepo() {
 }
 
 describe("routes", () => {
-  it("creates board and moves epic design → split with approval", async () => {
-    const { app } = appWithRepo();
+  it("blocks design → done until related tasks are done", async () => {
+    const { app, repo } = appWithRepo();
     const boardRes = await app.request("http://localhost/boards", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -44,33 +44,31 @@ describe("routes", () => {
     expect(boardRes.status).toBe(201);
     const board = await boardRes.json();
 
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Theme",
+      column: "requirements",
+      description: "",
+    });
     const cardRes = await app.request(
       `http://localhost/boards/${board.id}/cards`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          type: "epic",
-          title: "Theme",
+          type: "design",
+          title: "Theme · design",
           column: "design",
           description: "",
+          epicId: epic.id,
         }),
       },
     );
+    expect(cardRes.status).toBe(201);
     const card = await cardRes.json();
 
-    const denied = await app.request(`http://localhost/cards/${card.id}/move`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        to: "split",
-        actor: "human",
-        humanApproved: false,
-      }),
-    });
-    expect(denied.status).toBe(400);
-
-    const ok = await app.request(`http://localhost/cards/${card.id}/move`, {
+    const deniedCol = await app.request(`http://localhost/cards/${card.id}/move`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -79,9 +77,51 @@ describe("routes", () => {
         humanApproved: true,
       }),
     });
+    expect(deniedCol.status).toBe(400);
+
+    const noTasks = await app.request(`http://localhost/cards/${card.id}/move`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        to: "done",
+        actor: "human",
+        humanApproved: true,
+      }),
+    });
+    expect(noTasks.status).toBe(400);
+
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T1",
+      column: "dev",
+      description: "",
+      epicId: epic.id,
+      designId: card.id,
+    });
+    const stillOpen = await app.request(`http://localhost/cards/${card.id}/move`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        to: "done",
+        actor: "human",
+        humanApproved: true,
+      }),
+    });
+    expect(stillOpen.status).toBe(400);
+
+    repo.updateCard(task.id, { column: "done" });
+    const ok = await app.request(`http://localhost/cards/${card.id}/move`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        to: "done",
+        actor: "human",
+        humanApproved: true,
+      }),
+    });
     expect(ok.status).toBe(200);
-    const moved = await ok.json();
-    expect(moved.column).toBe("split");
+    expect((await ok.json()).column).toBe("done");
   });
 
   it("creates job when comment mentions a bot", async () => {
@@ -91,10 +131,18 @@ describe("routes", () => {
       boardId: board.id,
       type: "epic",
       title: "E",
-      column: "design",
+      column: "requirements",
       description: "",
     });
-    const res = await app.request(`http://localhost/cards/${epic.id}/comments`, {
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "D",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    const res = await app.request(`http://localhost/cards/${design.id}/comments`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -135,7 +183,7 @@ describe("routes", () => {
       boardId: board.id,
       type: "epic",
       title: "E",
-      column: "design",
+      column: "requirements",
       description: "",
     });
     const wrongType = await app.request(
@@ -212,7 +260,7 @@ describe("routes", () => {
       boardId: board.id,
       type: "epic",
       title: "E",
-      column: "design",
+      column: "requirements",
       description: "",
     });
     await app.request(`http://localhost/cards/${epic.id}/comments`, {
@@ -280,6 +328,19 @@ describe("routes", () => {
     const { id } = (await createRes.json()) as { id: string };
     expect(sessions.getSession(id)?.employeeRole).toBe("ba");
 
+    const resumeRes = await app.request(
+      `http://localhost/boards/${board.id}/cards/${req.id}/sessions`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ employeeRole: "ba" }),
+      },
+    );
+    expect(resumeRes.status).toBe(200);
+    const resumed = (await resumeRes.json()) as { id: string; resumed: boolean };
+    expect(resumed.id).toBe(id);
+    expect(resumed.resumed).toBe(true);
+
     const getRes = await app.request(`http://localhost/sessions/${id}`);
     expect(getRes.status).toBe(200);
     const session = await getRes.json();
@@ -289,5 +350,149 @@ describe("routes", () => {
       employeeRole: "ba",
       status: "open",
     });
+  });
+
+  it("deletes a card and unlinks dependents", async () => {
+    const { app, repo, sessions } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "requirements",
+      description: "epic_id: E-1\n",
+    });
+    const req = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "R",
+      column: "requirements",
+      description: "",
+      epicId: epic.id,
+    });
+    const session = sessions.createSession({
+      boardId: board.id,
+      cardId: epic.id,
+      employeeRole: "design",
+    });
+    sessions.appendMessage({
+      sessionId: session.id,
+      role: "user",
+      body: "hi",
+    });
+
+    const del = await app.request(`http://localhost/cards/${epic.id}`, {
+      method: "DELETE",
+    });
+    expect(del.status).toBe(200);
+    expect(repo.getCard(epic.id)).toBeNull();
+    expect(repo.getCard(req.id)?.epicId).toBeNull();
+    expect(sessions.getSession(session.id)).toBeNull();
+  });
+
+  it("reads workspace files and rejects path escape", async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-route-ws-"));
+    tmpFiles.push(ws);
+    fs.mkdirSync(path.join(ws, "docs/epics/E-1"), { recursive: true });
+    fs.writeFileSync(path.join(ws, "docs/epics/E-1/EPIC.md"), "# Hello\n");
+    fs.writeFileSync(path.join(ws, "docs/epics/E-1/A.java"), "class A {}");
+
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "W", workspacePath: ws });
+
+    const ok = await app.request(
+      `http://localhost/boards/${board.id}/workspace-file?path=${encodeURIComponent("docs/epics/E-1/EPIC.md")}`,
+    );
+    expect(ok.status).toBe(200);
+    const body = await ok.json();
+    expect(body.content).toContain("# Hello");
+    expect(body.language).toBe("markdown");
+
+    const bad = await app.request(
+      `http://localhost/boards/${board.id}/workspace-file?path=${encodeURIComponent("../../etc/passwd")}`,
+    );
+    expect(bad.status).toBe(400);
+
+    const tree = await app.request(
+      `http://localhost/boards/${board.id}/workspace-tree?root=${encodeURIComponent("docs/epics/E-1")}&depth=2`,
+    );
+    expect(tree.status).toBe(200);
+    const treeBody = await tree.json();
+    expect(treeBody.files.some((f: { path: string }) => f.path.endsWith("A.java"))).toBe(
+      true,
+    );
+
+    fs.writeFileSync(
+      path.join(ws, "docs/epics/E-1/demo.html"),
+      "<html><body><h1>Hi</h1></body></html>",
+    );
+    const raw = await app.request(
+      `http://localhost/boards/${board.id}/workspace-raw/docs/epics/E-1/demo.html`,
+    );
+    expect(raw.status).toBe(200);
+    expect(raw.headers.get("content-type")).toMatch(/text\/html/);
+    expect(await raw.text()).toContain("<h1>Hi</h1>");
+
+    const rawEscape = await app.request(
+      `http://localhost/boards/${board.id}/workspace-raw/docs/epics/E-1/../../../etc/passwd`,
+    );
+    expect(rawEscape.status).toBe(400);
+  });
+
+  it("creates design deep_dive job for design cards only", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/d" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Theme",
+      column: "requirements",
+      description: "",
+    });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "Round 1",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    const req = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "R",
+      column: "requirements",
+      description: "",
+      epicId: epic.id,
+    });
+
+    const ok = await app.request(`http://localhost/cards/${design.id}/design-jobs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "deep_dive", summary: "design context" }),
+    });
+    expect(ok.status).toBe(200);
+    const body = await ok.json();
+    expect(body.job.id).toBeTruthy();
+    const designEmp = repo.listEmployees(board.id).find((e) => e.role === "design")!;
+    expect(body.job.employeeId).toBe(designEmp.id);
+    expect(body.job.trigger).toBe("deep_dive");
+
+    const split = await app.request(`http://localhost/cards/${design.id}/design-jobs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "split" }),
+    });
+    expect(split.status).toBe(200);
+    const splitBody = await split.json();
+    const splitEmp = repo.listEmployees(board.id).find((e) => e.role === "split")!;
+    expect(splitBody.job.employeeId).toBe(splitEmp.id);
+
+    const bad = await app.request(`http://localhost/cards/${req.id}/design-jobs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "deep_dive", summary: "nope" }),
+    });
+    expect(bad.status).toBe(400);
   });
 });

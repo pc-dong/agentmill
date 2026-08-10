@@ -25,6 +25,8 @@ export type ChatInput = {
   boardId: string;
   history: Array<{ role: "user" | "assistant"; content: string }>;
   message: string;
+  /** When aborted, drivers should stop streaming and yield a partial done/error. */
+  signal?: AbortSignal;
 };
 
 export type RunResult = {

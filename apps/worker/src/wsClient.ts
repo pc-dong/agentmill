@@ -2,7 +2,10 @@ import WebSocket from "ws";
 import type { AgentDriver } from "@ai-workforce/agent";
 import type { BoardClient } from "./boardClient.js";
 import type { WorkerConfig } from "./config.js";
-import { handleSessionUserMessage } from "./sessionRunner.js";
+import {
+  abortSessionChat,
+  handleSessionUserMessage,
+} from "./sessionRunner.js";
 
 export type WsClientOutMsg =
   | { type: "session.agent_delta"; sessionId: string; text: string }
@@ -16,6 +19,7 @@ export type WsServerInMsg =
       cardId: string;
       text: string;
     }
+  | { type: "session.abort"; sessionId: string }
   | { type: "error"; message: string };
 
 export function apiBaseToWsUrl(apiBase: string): string {
@@ -96,6 +100,11 @@ async function handleIncoming(
 
   if (msg.type === "error") {
     console.error(`ws server error: ${msg.message}`);
+    return;
+  }
+
+  if (msg.type === "session.abort") {
+    abortSessionChat(msg.sessionId);
     return;
   }
 

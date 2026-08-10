@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import type { ArtifactRef, CardType, ColumnId } from "@ai-workforce/domain";
+import type { ArtifactRef, CardType, ColumnId, RequirementStatus } from "@ai-workforce/domain";
 import { SessionRepo } from "./sessions.js";
 
 export type Board = {
@@ -18,11 +18,17 @@ export type CardRecord = {
   description: string;
   column: ColumnId;
   epicId: string | null;
+  /** Task cards created from a design round point back here. */
+  designId: string | null;
+  /** Requirement coarse status; null for non-requirement cards. */
+  status: RequirementStatus | null;
   reworkCount: number;
   frozen: boolean;
   lockedJobId: string | null;
   lockedAt: string | null;
   artifacts: ArtifactRef[];
+  /** Populated for design cards when listing with links. */
+  requirementIds?: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -56,8 +62,8 @@ const DEFAULT_EMPLOYEES: Array<{
   watchColumns: ColumnId[];
 }> = [
   { role: "design", displayName: "Design Bot", watchColumns: ["design"] },
-  { role: "split", displayName: "Split Bot", watchColumns: ["split"] },
-  { role: "verify", displayName: "Verify Bot", watchColumns: ["verify"] },
+  { role: "split", displayName: "Split Bot", watchColumns: [] },
+  { role: "verify", displayName: "Verify Bot", watchColumns: [] },
   { role: "dev", displayName: "Dev Bot", watchColumns: ["dev"] },
   { role: "test", displayName: "Test Bot", watchColumns: ["test"] },
   { role: "review", displayName: "Review Bot", watchColumns: ["accept"] },
@@ -120,15 +126,23 @@ export class BoardRepo {
     description: string;
     column: ColumnId;
     epicId?: string | null;
+    designId?: string | null;
+    status?: RequirementStatus | null;
+    frozen?: boolean;
+    artifacts?: ArtifactRef[];
   }): CardRecord {
     const now = new Date().toISOString();
     const id = randomUUID();
+    const status =
+      input.type === "requirement"
+        ? (input.status ?? "open")
+        : (input.status ?? null);
     this.db
       .prepare(
         `INSERT INTO cards (
-           id, board_id, type, title, description, column_id, epic_id,
-           rework_count, frozen, artifacts_json, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, '[]', ?, ?)`,
+           id, board_id, type, title, description, column_id, epic_id, design_id,
+           rework_count, frozen, artifacts_json, status, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -138,6 +152,10 @@ export class BoardRepo {
         input.description,
         input.column,
         input.epicId ?? null,
+        input.designId ?? null,
+        input.frozen ? 1 : 0,
+        JSON.stringify(input.artifacts ?? []),
+        status,
         now,
         now,
       );
@@ -148,7 +166,7 @@ export class BoardRepo {
     const row = this.db
       .prepare(
         `SELECT id, board_id as boardId, type, title, description,
-                column_id as columnId, epic_id as epicId,
+                column_id as columnId, epic_id as epicId, design_id as designId, status,
                 rework_count as reworkCount, frozen, artifacts_json as artifactsJson,
                 locked_job_id as lockedJobId, locked_at as lockedAt,
                 created_at as createdAt, updated_at as updatedAt
@@ -163,6 +181,8 @@ export class BoardRepo {
           description: string;
           columnId: ColumnId;
           epicId: string | null;
+          designId: string | null;
+          status: string | null;
           reworkCount: number;
           frozen: number;
           artifactsJson: string;
@@ -181,6 +201,11 @@ export class BoardRepo {
       description: row.description,
       column: row.columnId,
       epicId: row.epicId,
+      designId: row.designId ?? null,
+      status:
+        row.type === "requirement"
+          ? ((row.status as RequirementStatus) || "open")
+          : null,
       reworkCount: row.reworkCount,
       frozen: !!row.frozen,
       lockedJobId: row.lockedJobId || null,
@@ -195,7 +220,13 @@ export class BoardRepo {
     const rows = this.db
       .prepare(`SELECT id FROM cards WHERE board_id = ? ORDER BY created_at`)
       .all(boardId) as Array<{ id: string }>;
-    return rows.map((r) => this.getCard(r.id)!);
+    return rows.map((r) => {
+      const card = this.getCard(r.id)!;
+      if (card.type === "design") {
+        card.requirementIds = this.listRequirementIdsForDesign(card.id);
+      }
+      return card;
+    });
   }
 
   updateCard(
@@ -205,6 +236,8 @@ export class BoardRepo {
       description: string;
       column: ColumnId;
       epicId: string | null;
+      designId: string | null;
+      status: RequirementStatus | null;
       reworkCount: number;
       frozen: boolean;
       artifacts: ArtifactRef[];
@@ -219,21 +252,135 @@ export class BoardRepo {
     };
     this.db
       .prepare(
-        `UPDATE cards SET title=?, description=?, column_id=?, epic_id=?,
-         rework_count=?, frozen=?, artifacts_json=?, updated_at=? WHERE id=?`,
+        `UPDATE cards SET title=?, description=?, column_id=?, epic_id=?, design_id=?,
+         rework_count=?, frozen=?, artifacts_json=?, status=?, updated_at=? WHERE id=?`,
       )
       .run(
         next.title,
         next.description,
         next.column,
         next.epicId,
+        next.designId,
         next.reworkCount,
         next.frozen ? 1 : 0,
         JSON.stringify(next.artifacts),
+        next.type === "requirement" ? (next.status ?? "open") : null,
         next.updatedAt,
         id,
       );
     return this.getCard(id)!;
+  }
+
+  linkDesignRequirements(designId: string, requirementIds: string[]): void {
+    const now = new Date().toISOString();
+    const insert = this.db.prepare(
+      `INSERT OR IGNORE INTO design_requirements (design_id, requirement_id, created_at)
+       VALUES (?, ?, ?)`,
+    );
+    const bump = this.db.prepare(
+      `UPDATE cards SET status = 'in_progress', updated_at = ?
+       WHERE id = ? AND type = 'requirement'
+         AND (status IS NULL OR status = '' OR status = 'open')`,
+    );
+    const tx = this.db.transaction(() => {
+      for (const rid of requirementIds) {
+        insert.run(designId, rid, now);
+        bump.run(now, rid);
+      }
+    });
+    tx();
+  }
+
+  listRequirementIdsForDesign(designId: string): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT requirement_id as id FROM design_requirements WHERE design_id = ?`,
+      )
+      .all(designId) as Array<{ id: string }>;
+    return rows.map((r) => r.id);
+  }
+
+
+  listTasksForDesign(designId: string): CardRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id FROM cards WHERE design_id = ? AND type = 'task' ORDER BY created_at`,
+      )
+      .all(designId) as Array<{ id: string }>;
+    return rows.map((r) => this.getCard(r.id)!);
+  }
+
+  designTasksAllDone(designId: string): boolean {
+    const tasks = this.listTasksForDesign(designId);
+    if (tasks.length === 0) return false;
+    return tasks.every((t) => t.column === "done");
+  }
+
+  listDesignIdsForRequirement(requirementId: string): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT design_id as id FROM design_requirements WHERE requirement_id = ?`,
+      )
+      .all(requirementId) as Array<{ id: string }>;
+    return rows.map((r) => r.id);
+  }
+
+  createDesignRound(input: {
+    boardId: string;
+    epicId: string;
+    title: string;
+    requirementIds: string[];
+    description?: string;
+  }): CardRecord {
+    const design = this.createCard({
+      boardId: input.boardId,
+      type: "design",
+      title: input.title,
+      description: input.description ?? "",
+      column: "design",
+      epicId: input.epicId,
+    });
+    this.linkDesignRequirements(design.id, input.requirementIds);
+    const out = this.getCard(design.id)!;
+    out.requirementIds = this.listRequirementIdsForDesign(design.id);
+    return out;
+  }
+
+  deleteCard(id: string): boolean {
+    const card = this.getCard(id);
+    if (!card) return false;
+
+    const run = this.db.transaction(() => {
+      // Unlink requirements/tasks that pointed at this epic; clear design links.
+      if (card.type === "epic") {
+        this.db
+          .prepare(`UPDATE cards SET epic_id = NULL, updated_at = ? WHERE epic_id = ?`)
+          .run(new Date().toISOString(), id);
+      }
+      this.db
+        .prepare(
+          `DELETE FROM design_requirements WHERE design_id = ? OR requirement_id = ?`,
+        )
+        .run(id, id);
+
+      const sessionIds = (
+        this.db
+          .prepare(`SELECT id FROM sessions WHERE card_id = ?`)
+          .all(id) as Array<{ id: string }>
+      ).map((r) => r.id);
+      for (const sid of sessionIds) {
+        this.db
+          .prepare(`DELETE FROM session_messages WHERE session_id = ?`)
+          .run(sid);
+      }
+      this.db.prepare(`DELETE FROM sessions WHERE card_id = ?`).run(id);
+
+      // Clear lock references if any other card somehow pointed here (n/a).
+      const result = this.db.prepare(`DELETE FROM cards WHERE id = ?`).run(id);
+      return result.changes === 1;
+    });
+
+    return run();
   }
 
   addComment(input: {
@@ -510,12 +657,15 @@ export class BoardRepo {
       this.sessionRepo().listOpenSessionCardIds(boardId),
     );
     const employees = this.listEmployees(boardId);
+    const designFlowRoles = new Set(["design", "split", "verify"]);
     for (const emp of employees) {
       for (const col of emp.watchColumns) {
         const cards = this.listCards(boardId).filter((c) => c.column === col);
         for (const card of cards) {
           if (card.frozen || card.lockedJobId || openSessionCardIds.has(card.id))
             continue;
+          if (designFlowRoles.has(emp.role) && card.type !== "design") continue;
+          if (emp.role === "ba" && card.type !== "requirement") continue;
           const existing = this.db
             .prepare(
               `SELECT id FROM jobs

@@ -43,7 +43,7 @@ describe("BoardRepo", () => {
       boardId: board.id,
       type: "epic",
       title: "Auth theme",
-      column: "design",
+      column: "requirements",
       description: "",
     });
     const req = repo.createCard({
@@ -70,7 +70,7 @@ describe("BoardRepo", () => {
       boardId: board.id,
       type: "epic",
       title: "E",
-      column: "design",
+      column: "requirements",
       description: "",
     });
     repo.addComment({
@@ -96,7 +96,7 @@ describe("BoardRepo", () => {
       boardId: board.id,
       type: "epic",
       title: "E",
-      column: "design",
+      column: "requirements",
       description: "",
     });
     const emp = repo.listEmployees(board.id).find((e) => e.role === "design")!;
@@ -119,7 +119,7 @@ describe("BoardRepo", () => {
       boardId: board.id,
       type: "epic",
       title: "E",
-      column: "design",
+      column: "requirements",
       description: "",
     });
     repo.updateCard(epic.id, { frozen: true });
@@ -142,7 +142,7 @@ describe("BoardRepo", () => {
       boardId: board.id,
       type: "epic",
       title: "E",
-      column: "design",
+      column: "requirements",
       description: "",
     });
     const emp = repo.listEmployees(board.id).find((e) => e.role === "design")!;
@@ -157,7 +157,7 @@ describe("BoardRepo", () => {
     expect(failed?.status).toBe("failed");
     expect(failed?.error).toBe("something broke");
     const card = repo.getCard(epic.id)!;
-    expect(card.column).toBe("design");
+    expect(card.column).toBe("requirements");
     expect(card.lockedJobId).toBeNull();
     expect(
       repo.listComments(epic.id).some((c) => c.body === "something broke"),
@@ -170,23 +170,31 @@ describe("BoardRepo", () => {
     const designEmp = repo
       .listEmployees(board.id)
       .find((e) => e.role === "design")!;
+    const theme = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Theme",
+      column: "requirements",
+      description: "",
+    });
 
     const frozen = repo.createCard({
       boardId: board.id,
-      type: "epic",
+      type: "design",
       title: "Frozen",
       column: "design",
       description: "",
+      epicId: theme.id,
     });
     repo.updateCard(frozen.id, { frozen: true });
 
     const locked = repo.createCard({
       boardId: board.id,
-      type: "requirement",
+      type: "design",
       title: "Locked",
       column: "design",
       description: "",
-      epicId: frozen.id,
+      epicId: theme.id,
     });
     const lockJob = repo.createJob({
       boardId: board.id,
@@ -198,11 +206,11 @@ describe("BoardRepo", () => {
 
     const openBusy = repo.createCard({
       boardId: board.id,
-      type: "requirement",
+      type: "design",
       title: "Open busy",
       column: "design",
       description: "",
-      epicId: frozen.id,
+      epicId: theme.id,
     });
     repo.createJob({
       boardId: board.id,
@@ -213,11 +221,11 @@ describe("BoardRepo", () => {
 
     const claimedBusy = repo.createCard({
       boardId: board.id,
-      type: "requirement",
+      type: "design",
       title: "Claimed busy",
       column: "design",
       description: "",
-      epicId: frozen.id,
+      epicId: theme.id,
     });
     const claimedJob = repo.createJob({
       boardId: board.id,
@@ -229,11 +237,11 @@ describe("BoardRepo", () => {
 
     const idle = repo.createCard({
       boardId: board.id,
-      type: "requirement",
+      type: "design",
       title: "Idle",
       column: "design",
       description: "",
-      epicId: frozen.id,
+      epicId: theme.id,
     });
 
     const created = repo.createPollJobs(board.id);
@@ -254,13 +262,21 @@ describe("BoardRepo", () => {
     const designEmp = repo
       .listEmployees(board.id)
       .find((e) => e.role === "design")!;
+    const theme = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Theme",
+      column: "requirements",
+      description: "",
+    });
 
     const doneCard = repo.createCard({
       boardId: board.id,
-      type: "epic",
+      type: "design",
       title: "Done card",
       column: "design",
       description: "",
+      epicId: theme.id,
     });
     const doneJob = repo.createJob({
       boardId: board.id,
@@ -273,11 +289,11 @@ describe("BoardRepo", () => {
 
     const failedCard = repo.createCard({
       boardId: board.id,
-      type: "requirement",
+      type: "design",
       title: "Failed card",
       column: "design",
       description: "",
-      epicId: doneCard.id,
+      epicId: theme.id,
     });
     const failedJob = repo.createJob({
       boardId: board.id,
@@ -299,7 +315,7 @@ describe("BoardRepo", () => {
       boardId: board.id,
       type: "epic",
       title: "E",
-      column: "design",
+      column: "requirements",
       description: "",
     });
     const emp = repo.listEmployees(board.id).find((e) => e.role === "design")!;
@@ -329,7 +345,7 @@ describe("BoardRepo", () => {
       boardId: board.id,
       type: "epic",
       title: "E",
-      column: "design",
+      column: "requirements",
       description: "",
     });
     sessions.createSession({ boardId: board.id, cardId: epic.id });
@@ -351,13 +367,21 @@ describe("BoardRepo", () => {
     const designEmp = repo
       .listEmployees(board.id)
       .find((e) => e.role === "design")!;
+    const theme = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Theme",
+      column: "requirements",
+      description: "",
+    });
 
     const sessionCard = repo.createCard({
       boardId: board.id,
-      type: "epic",
+      type: "design",
       title: "In session",
       column: "design",
       description: "",
+      epicId: theme.id,
     });
     sessions.createSession({
       boardId: board.id,
@@ -366,11 +390,11 @@ describe("BoardRepo", () => {
 
     const idle = repo.createCard({
       boardId: board.id,
-      type: "requirement",
+      type: "design",
       title: "Idle",
       column: "design",
       description: "",
-      epicId: sessionCard.id,
+      epicId: theme.id,
     });
 
     expect(repo.createPollJobs(board.id)).toBe(1);
@@ -382,11 +406,9 @@ describe("BoardRepo", () => {
       true,
     );
     expect(
-      (
-        openJobs.find((j) => (j as { cardId: string }).cardId === idle.id) as
-          | { employeeId: string }
-          | undefined
-      )?.employeeId,
+      (openJobs.find((j) => (j as { cardId: string }).cardId === idle.id) as {
+        employeeId: string;
+      }).employeeId,
     ).toBe(designEmp.id);
   });
 
@@ -401,7 +423,7 @@ describe("BoardRepo", () => {
       boardId: board.id,
       type: "epic",
       title: "In session",
-      column: "design",
+      column: "requirements",
       description: "",
     });
     sessions.createSession({
@@ -476,5 +498,47 @@ describe("BoardRepo", () => {
     const ba = repo.listEmployees(board.id).find((e) => e.role === "ba");
     expect(ba?.displayName).toBe("BA Bot");
     expect(ba?.watchColumns).toEqual(["requirements"]);
+  });
+
+  it("migrates stranded epics in design/split/verify into design cards", () => {
+    const file = path.join(
+      os.tmpdir(),
+      `aiw-mig-${Date.now()}-${Math.random().toString(16).slice(2)}.sqlite`,
+    );
+    tmpFiles.push(file);
+    const db = openDb(file);
+    migrate(db);
+    const repo = new BoardRepo(db);
+    const board = repo.createBoard({ name: "mig", workspacePath: "/tmp/m" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Old Theme",
+      column: "requirements",
+      description: "",
+    });
+    const req = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "Req",
+      column: "requirements",
+      description: "",
+      epicId: epic.id,
+    });
+    db.prepare(`UPDATE cards SET column_id = 'design' WHERE id = ?`).run(epic.id);
+    expect(repo.getCard(epic.id)!.column).toBe("design");
+
+    migrate(db);
+
+    const epicAfter = repo.getCard(epic.id)!;
+    expect(epicAfter.type).toBe("epic");
+    expect(epicAfter.column).toBe("requirements");
+
+    const designs = repo.listCards(board.id).filter((c) => c.type === "design");
+    expect(designs).toHaveLength(1);
+    expect(designs[0]!.column).toBe("design");
+    expect(designs[0]!.epicId).toBe(epic.id);
+    expect(designs[0]!.requirementIds).toContain(req.id);
+    expect(repo.getCard(req.id)!.status).toBe("in_progress");
   });
 });

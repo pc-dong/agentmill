@@ -1,4 +1,4 @@
-import { buildPrompt, parseBaSettle, ROLE_PROMPTS, type AgentDriver } from "@ai-workforce/agent";
+import { buildPrompt, canonicalBaSettleArtifacts, parseBaSettle, ROLE_PROMPTS, type AgentDriver } from "@ai-workforce/agent";
 import type { BoardClient } from "./boardClient.js";
 import { resolveBaTemplatesDir, writeBaDocuments } from "./baWrite.js";
 import { applyRoleOutcome } from "./outcomes.js";
@@ -86,7 +86,7 @@ export async function executeClaimedJob(
         summaryMarkdown: residueSummary(job.payload ?? ""),
         templatesDir,
       });
-      const artifacts = mapArtifacts(protocol.artifacts);
+      const artifacts = mapArtifacts(canonicalBaSettleArtifacts(protocol));
       await client.baSettle(card.id, {
         mode: protocol.mode,
         epicKey: protocol.epicId,
@@ -104,8 +104,11 @@ export async function executeClaimedJob(
       return;
     }
 
-    const isBaPath = trigger === "deep_dive" || employee.role === "ba";
-    const roleKey = trigger === "deep_dive" ? "baDeepDive" : employee.role;
+    const isBaPath = employee.role === "ba";
+    const roleKey =
+      trigger === "deep_dive" && employee.role === "ba"
+        ? "baDeepDive"
+        : employee.role;
     const promptBase =
       roleKey === "baDeepDive"
         ? [
@@ -122,17 +125,21 @@ export async function executeClaimedJob(
           });
 
     let prompt = promptBase;
-    if (employee.role === "split" && card.type === "epic") {
-      const siblings = (await client.listCards()).filter(
-        (c) => c.type === "requirement" && c.epicId === card.id,
+    if (employee.role === "split" && card.type === "design") {
+      const all = await client.listCards();
+      const designCard = all.find((c) => c.id === card.id) as
+        | { requirementIds?: string[] }
+        | undefined;
+      const linked = new Set(designCard?.requirementIds ?? []);
+      const siblings = all.filter(
+        (c) =>
+          c.type === "requirement" &&
+          (linked.size > 0 ? linked.has(c.id) : c.epicId === card.epicId),
       );
       prompt = enrichSplitPrompt(prompt, siblings);
     }
-    if (
-      (trigger === "deep_dive" || roleKey === "baDeepDive") &&
-      job.payload?.trim()
-    ) {
-      prompt = `${prompt}\n\n${job.payload.trim()}`;
+    if (trigger === "deep_dive" && job.payload?.trim()) {
+      prompt = `${prompt}\n\n## Deep-dive context\n${job.payload.trim()}`;
     }
 
     const result = await driver.oneshot({

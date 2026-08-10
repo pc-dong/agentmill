@@ -17,8 +17,8 @@
 在一个真实「一 workspace 多 git 仓」项目上跑通：
 
 1. 人创建 Epic 与多张需求卡；
-2. 与 Design Bot 实时对齐，设计文档落入 workspace，卡片/Epic 只挂 link；
-3. Split Bot 拆任务 → Verify Bot 做覆盖校验；
+2. 「开一轮设计」创建设计卡，与 Design Bot 实时对齐，设计文档落入 workspace，卡片只挂 link；
+3. Split Bot 在设计卡上拆任务 → Verify Bot 做覆盖校验；
 4. Dev / Test 至少一张任务卡进入验收；
 5. 测试失败退回开发、满 3 次冻结并人工介入可演示；
 6. 人批准后进入 Done。
@@ -70,11 +70,12 @@
 |------|------|
 | **Workspace** | 本机目录；可含多个独立 git 仓；与 Board 1:1 |
 | **Board** | 一个 workspace 的交付看板 |
-| **Epic** | 主题聚合根；看板上以 `type=epic` 的主题卡呈现，流经设计/拆分/校验；关联多需求、设计产物 link、任务卡 |
-| **Card** | 工作项；`type` ∈ {epic, requirement, task}（设计不以长文卡片为真相） |
+| **Epic** | 主题容器；`type=epic`，**固定在需求列**（可多轮迭代，不在列上移动）；关联多需求与多轮设计卡 |
+| **Design** | 设计批次卡；`type=design`，挂 `epicId`，与需求多对多；流经 **设计 → 拆分 → 校验** |
+| **Card** | 工作项；`type` ∈ {epic, requirement, design, task}（设计文档真相仍在 workspace，卡上只挂 link） |
 | **Employee** | AI 员工：角色、盯的列、prompt 包、adapter（MVP=cursor） |
 | **Comment** | 沟通与事件流水 |
-| **Session** | 卡片/Epic 上的实时对齐会话（桥到本机 Cursor） |
+| **Session** | 卡片上的实时对齐会话（桥到本机 Cursor；设计澄清挂在 design 卡） |
 | **ArtifactRef** | link 记录（workspace 相对路径或 PR URL 等），不存正文 |
 | **Job** | Worker 可认领的执行单元（来自 `@` 或定时扫描） |
 
@@ -88,9 +89,9 @@
 
 | 列 | 主要执行者 | 出门规则 |
 |----|------------|----------|
-| 需求 | 人（可 `@` Design 协助澄清） | 人将相关需求归入 Epic 后，把 **epic 主题卡** 放入「设计」列 |
-| 设计 | Design Bot + 人（侧栏 / Cursor） | **人批准** → 主题卡进入拆分 |
-| 拆分 | Split Bot | 生成任务卡 + breakdown 文档 link → 校验 |
+| 需求 | 人 + BA（澄清）；Epic 主题固定本列 | 人勾选若干需求 **「开一轮设计」** → 创建设计卡进「设计」列 |
+| 设计 | Design Bot + 人（侧栏 / Cursor） | **人批准** → **设计卡**进入拆分 |
+| 拆分 | Split Bot | 在设计卡上拆出任务卡 + breakdown link → 校验 |
 | 校验 | Verify Bot | 覆盖通过 → 任务进入开发；不通过 → 打回拆分并写缺口 |
 | 开发 | Dev Bot | 完成并挂 PR link → 可自推测试 |
 | 测试 | Test Bot | 通过 → 验收；不通过见 §5.2 |
@@ -100,11 +101,11 @@
 
 | 列 | 出现的卡片类型 |
 |----|----------------|
-| 需求 | `requirement`（通过 `epic_id` 归属主题；可用 Epic 视图筛选） |
-| 设计 / 拆分 / 校验 | `epic` 主题卡（整主题进入设计→拆分→校验；上下文=其下需求+设计文档） |
-| 开发 / 测试 / 验收 / Done | `task`（由 Split 生成，继承 `epic_id`） |
+| 需求 | `epic`（主题，不移动）+ `requirement`（通过 `epic_id` 归属；粗状态 `open` / `in_progress` / `done` + UI 派生徽章） |
+| 设计 / 拆分 / 校验 | `design` 设计批次卡（上下文=关联需求 + 设计文档；`epicId` 指向主题 Epic） |
+| 开发 / 测试 / 验收 / Done | `task`（由 Split 在设计卡上生成，`epicId` 仍指向主题 Epic） |
 
-主题视图 / 筛选用于从 Epic 一眼看到关联需求、任务与产物 link；不另建一套平行看板。
+关联表 `design_requirements` 表达设计卡 ↔ 需求的多对多。主题视图用于从 Epic 看到关联需求、设计轮次、任务与产物 link。
 
 ### 4.3 产物约定
 
@@ -140,8 +141,12 @@
 
 ### 5.3 Split / Verify
 
-- Split：输入 = Epic 下需求集合 + 设计文档；输出 = 若干 `task` 卡 + breakdown link。  
-- Verify：检查任务集合是否覆盖需求与技术方案；不通过则打回拆分列并附缺口说明（文档 link + 评论）。
+- Split：输入 = **设计卡**关联的需求集合 + 设计文档；输出 = 若干 `task` 卡（`epicId` = 主题 Epic）+ breakdown link；设计卡移入校验。  
+- Verify：作用于 **设计卡**；检查任务集合是否覆盖关联需求与技术方案；不通过则打回拆分列并附缺口说明（文档 link + 评论）。
+
+### 5.4 需求粗状态
+
+需求卡不改列；持久化 `status` ∈ {`open`, `in_progress`, `done`}。关联到未结束设计卡时自动建议 `in_progress`；人可随时手动覆盖。UI 另展示派生细节（如「设计中: …」「任务 2/5 Done」），不落库细枚举。
 
 ## 6. 触发与实时交互
 
@@ -230,9 +235,19 @@ AgentDriver
 | 绑定 | 一板一 workspace（可多 repo） |
 | 任务范围 | 默认整 workspace，文案约束（A） |
 | 实时对齐 | 侧栏 + Cursor 深挖（C） |
-| 需求关联 | Epic 聚合（C） |
+| 需求关联 | Epic 聚合 + 设计卡多对多（`design_requirements`） |
 | 技术栈 | 全 TypeScript |
+
+### 存量数据迁移
+
+API 启动时 `migrate()`：若仍有 `type=epic` 且列在 `design|split|verify` 的旧数据，则：
+
+1. 新建同列的 `type=design` 卡（标题加「· 设计批次」），`epicId` 指向原 Epic，复制 artifacts；  
+2. 将该 Epic 下所有 requirement 写入 `design_requirements`，并把其 `status` 从 `open` 升为 `in_progress`；  
+3. 将原 Epic 移回 `requirements`。
+
+幂等：已在需求列的 Epic 不会被再次转换。
 
 ---
 
-**审阅请关注：** 列与 Epic 职责是否清晰、退回熔断是否符合预期、MVP 边界是否可接受。通过后进入实现计划（writing-plans）。
+**审阅请关注：** 列与 Epic / 设计卡职责是否清晰、退回熔断是否符合预期、MVP 边界是否可接受。通过后进入实现计划（writing-plans）。
