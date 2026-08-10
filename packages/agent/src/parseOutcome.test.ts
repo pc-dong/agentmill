@@ -41,4 +41,15 @@ describe("parseOutcome", () => {
     expect(o.verify).toBe("fail");
     expect(o.test).toBeUndefined();
   });
+
+  it("parses SUMMARY line", () => {
+    const o = parseOutcome(
+      "Some narrative\nSUMMARY: implemented oauth flow\nARTIFACT pr https://example.com/pr/1",
+    );
+    expect(o.summaryLine).toBe("implemented oauth flow");
+  });
+
+  it("parses SUMMARY case-insensitively", () => {
+    expect(parseOutcome("summary: done").summaryLine).toBe("done");
+  });
 });

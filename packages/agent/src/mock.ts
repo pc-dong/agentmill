@@ -59,6 +59,7 @@ export class MockDriver implements AgentDriver {
     } else if (input.role === "dev") {
       summary = [
         `Mock ${input.role} completed for card ${input.cardId}.`,
+        "SUMMARY: mock dev implementation complete",
         "ARTIFACT pr https://example.com/pr/1 PR",
       ].join("\n");
     } else if (input.role === "test") {

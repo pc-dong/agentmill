@@ -173,18 +173,31 @@ export async function applyRoleOutcome(
     }
 
     case "dev": {
-      const hasPr = ctx.artifacts.some((a) => a.kind === "pr");
-      if (hasPr || summary.trim().length > 0) {
-        try {
-          await client.moveCard(ctx.cardId, "test", "bot");
-        } catch (e) {
-          const message = e instanceof Error ? e.message : String(e);
-          await client.postComment(
-            ctx.cardId,
-            "bot",
-            `Failed to move task to test: ${message}`,
-          );
-        }
+      const line =
+        outcome.summaryLine ??
+        summary.match(/^SUMMARY:\s*(.+)$/im)?.[1]?.trim();
+      if (!line?.trim()) {
+        await client.postComment(
+          ctx.cardId,
+          "bot",
+          "Warning: missing SUMMARY: line; not moving to test",
+        );
+        return;
+      }
+      await client.postComment(
+        ctx.cardId,
+        "bot",
+        `实现总结\n${line.trim()}`,
+      );
+      try {
+        await client.moveCard(ctx.cardId, "test", "bot");
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        await client.postComment(
+          ctx.cardId,
+          "bot",
+          `Failed to move task to test: ${message}`,
+        );
       }
       return;
     }

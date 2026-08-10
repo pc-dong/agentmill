@@ -7,14 +7,21 @@ export type ParsedOutcome = {
   tasks: ParsedTask[];
   verify?: "pass" | "fail";
   test?: "pass" | "fail";
+  summaryLine?: string;
 };
 
 const TASK_LINE = /^TASK\s+(.+)$/i;
 const VERIFY_LINE = /^VERIFY\s+(pass|fail)$/i;
 const TEST_LINE = /^TEST\s+(pass|fail)$/i;
+const SUMMARY_LINE = /^SUMMARY:\s*(.+)$/im;
 
 export function parseOutcome(summary: string): ParsedOutcome {
   const outcome: ParsedOutcome = { tasks: [] };
+
+  const summaryMatch = summary.match(SUMMARY_LINE);
+  if (summaryMatch) {
+    outcome.summaryLine = summaryMatch[1]!.trim();
+  }
 
   for (const raw of summary.split(/\r?\n/)) {
     const line = raw.trim();

@@ -178,10 +178,50 @@ describe("applyRoleOutcome", () => {
   });
 
   describe("dev", () => {
-    it("moves to test when summary present", async () => {
+    it("moves to test and posts 实现总结 when SUMMARY present", async () => {
+      const client = fakeClient();
+      await applyRoleOutcome(
+        "dev",
+        "SUMMARY: implemented oauth\nARTIFACT pr https://example.com/pr/1",
+        taskCtx,
+        client,
+      );
+      expect(client.postComment).toHaveBeenCalledWith(
+        "task1",
+        "bot",
+        "实现总结\nimplemented oauth",
+      );
+      expect(client.moveCard).toHaveBeenCalledWith("task1", "test", "bot");
+    });
+
+    it("warns and does not move without SUMMARY", async () => {
       const client = fakeClient();
       await applyRoleOutcome("dev", "done", taskCtx, client);
-      expect(client.moveCard).toHaveBeenCalledWith("task1", "test", "bot");
+      expect(client.postComment).toHaveBeenCalledWith(
+        "task1",
+        "bot",
+        "Warning: missing SUMMARY: line; not moving to test",
+      );
+      expect(client.moveCard).not.toHaveBeenCalled();
+    });
+
+    it("does not move with PR alone without SUMMARY", async () => {
+      const client = fakeClient();
+      await applyRoleOutcome(
+        "dev",
+        "ARTIFACT pr https://example.com/pr/1 PR",
+        {
+          ...taskCtx,
+          artifacts: [{ kind: "pr", href: "https://example.com/pr/1" }],
+        },
+        client,
+      );
+      expect(client.postComment).toHaveBeenCalledWith(
+        "task1",
+        "bot",
+        "Warning: missing SUMMARY: line; not moving to test",
+      );
+      expect(client.moveCard).not.toHaveBeenCalled();
     });
   });
 

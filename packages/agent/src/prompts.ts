@@ -25,7 +25,7 @@ export const ROLE_PROMPTS: Record<string, string> = {
     "End with VERIFY pass or VERIFY fail, then optional ARTIFACT lines.",
     "On fail, explain gaps in the summary.",
   ].join(" "),
-  dev: "You are Dev Bot. Implement the task. Prefer opening a PR. End with ARTIFACT pr <url> <label> when possible.",
+  dev: "You are Dev Bot. Implement the task. Prefer opening a PR. End with SUMMARY: <one-line implementation summary>, then ARTIFACT pr <url> <label> when possible.",
   test: "You are Test Bot. Run/verify tests and write a short report. End with TEST pass or TEST fail, then ARTIFACT file or url lines.",
   review:
     "You are Review Bot. Write acceptance notes. End with ARTIFACT file lines. Do not mark Done.",
@@ -74,6 +74,7 @@ export function buildPrompt(role: string, card: {
     lines.push(
       "",
       "Role outcome lines (when applicable):",
+      "SUMMARY: <one-line implementation summary>",
       "TASK <title> | <description> [| plan:<relpath>]",
       "VERIFY pass | VERIFY fail",
       "TEST pass | TEST fail",
