@@ -16,7 +16,7 @@ const OCCUPANCY: Record<Card["type"], readonly string[]> = {
   requirement: ["requirements"],
   epic: ["requirements"],
   design: ["design", "done"],
-  task: ["dev", "test", "accept", "done"],
+  task: ["design", "dev", "test", "accept", "done"],
 };
 
 const HUMAN_GATES = new Set(["design→done", "accept→done"]);
@@ -269,8 +269,8 @@ export function BoardView(props: {
         })}
       </div>
       <p className="board-hint meta">
-        Epic 固定需求列；设计卡用侧栏「拆分/校验」。相关任务全部 Done 后可将设计卡拖到
-        Done（需确认）。验收→Done 也需确认。
+        Epic 固定需求列；拆分任务落在设计列，校验通过后可拖入开发。设计卡用侧栏「拆分对齐/校验」。相关任务全部
+        Done 后可将设计卡拖到 Done（需确认）。验收→Done 也需确认。
       </p>
       {preview && (
         <DocPreviewModal

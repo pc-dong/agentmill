@@ -5,6 +5,10 @@ import { DocPreviewModal } from "./DocPreviewModal";
 import { requirementDerivedBadges, statusLabel } from "./derivedBadges";
 import { MarkdownBody } from "./MarkdownBody";
 import { RequirementChat } from "./RequirementChat";
+import { SplitChat } from "./SplitChat";
+
+const OPEN_SPLIT_BLOCK =
+  "请先结束拆分对齐会话（settle）后再拆分/校验";
 
 type Employee = {
   id: string;
@@ -186,6 +190,33 @@ export function CardDrawer(props: {
     [props.card, props.cards],
   );
 
+  const relatedSplitTasks = useMemo(() => {
+    if (props.card.type !== "design") return [];
+    return props.cards.filter(
+      (c) => c.type === "task" && c.designId === props.card.id,
+    );
+  }, [props.card, props.cards]);
+
+  const splitVerifyBanner = useMemo(() => {
+    if (props.card.type !== "design" || relatedSplitTasks.length === 0) {
+      return null;
+    }
+    const anyFrozen = relatedSplitTasks.some((t) => t.frozen);
+    if (anyFrozen || !props.card.splitVerifiedAt) {
+      if (anyFrozen) {
+        return {
+          tone: "wait" as const,
+          text: "拆分待校验，通过后可拖入开发列",
+        };
+      }
+      return {
+        tone: "wait" as const,
+        text: "拆分已变更，请重新校验覆盖",
+      };
+    }
+    return null;
+  }, [props.card, relatedSplitTasks]);
+
   const mentionSuggestions = useMemo(() => {
     const q = mentionQuery.toLowerCase();
     return employees.filter(
@@ -224,8 +255,32 @@ export function CardDrawer(props: {
     return list;
   }
 
+  async function ensureNoOpenSplitSession(): Promise<boolean> {
+    try {
+      const latest = await api.getLatestSession(
+        props.card.boardId,
+        props.card.id,
+        "split",
+      );
+      if (latest?.session.status === "open") {
+        setError(OPEN_SPLIT_BLOCK);
+        setPipelineTone("err");
+        setPipelineNote(OPEN_SPLIT_BLOCK);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      setError(String(e));
+      return false;
+    }
+  }
+
   async function runDesignPipeline(kind: "split" | "verify") {
     setError(null);
+    setPipelineNote(null);
+    if (!(await ensureNoOpenSplitSession())) {
+      return;
+    }
     setPipelineBusy(kind);
     setPipelineTone("info");
     setPipelineNote(
@@ -241,7 +296,7 @@ export function CardDrawer(props: {
       setPipelineTone("wait");
       setPipelineNote(
         kind === "split"
-          ? `拆分 Job 已提交（${shortId}…）。Worker / Cursor 执行中，完成后会在下方评论回写，并创建冻结任务卡。`
+          ? `拆分 Job 已提交（${shortId}…）。Worker / Cursor 执行中，完成后会在下方评论回写，并在「设计」列创建冻结任务卡。`
           : `校验 Job 已提交（${shortId}…）。Worker / Cursor 执行中，完成后会在下方评论回写 VERIFY 结果。`,
       );
       props.onChanged();
@@ -262,8 +317,8 @@ export function CardDrawer(props: {
           setPipelineTone("ok");
           setPipelineNote(
             kind === "split"
-              ? "拆分已完成：请查看下方评论，并在「开发」列确认新任务卡（校验通过前为冻结）。"
-              : "校验已完成：请查看下方评论中的 VERIFY 结论。",
+              ? "拆分已完成：请查看下方评论，并在「设计」列确认新任务卡（校验通过前为冻结，通过后可拖入开发列）。"
+              : "校验已完成：请查看下方评论中的 VERIFY 结论；通过后可将任务拖入开发列。",
           );
           props.onChanged();
           setPipelineBusy(null);
@@ -568,6 +623,13 @@ export function CardDrawer(props: {
               >
                 {pipelineBusy === "split" ? "拆分中…" : "拆分任务"}
               </button>
+            </div>
+            <SplitChat
+              boardId={props.card.boardId}
+              card={props.card}
+              onSettled={props.onChanged}
+            />
+            <div className="chat-actions">
               <button
                 type="button"
                 disabled={pipelineBusy !== null}
@@ -604,6 +666,14 @@ export function CardDrawer(props: {
                 {pipelineBusy === "done" ? "移动中…" : "完成 → Done"}
               </button>
             </div>
+            {splitVerifyBanner && (
+              <p
+                className={`design-pipeline-banner tone-${splitVerifyBanner.tone}`}
+                role="status"
+              >
+                {splitVerifyBanner.text}
+              </p>
+            )}
             {pipelineNote && (
               <p
                 className={`design-pipeline-banner tone-${pipelineTone}`}
@@ -616,7 +686,7 @@ export function CardDrawer(props: {
               </p>
             )}
             <p className="meta">
-              拆分会调用 Split Bot（writing-plans）生成 plan 并创建冻结任务卡；校验通过后解冻。相关任务全部
+              流程：拆分任务 → 拆分对齐 → 校验覆盖 → 完成→Done。拆分会在「设计」列创建冻结任务；校验通过后可拖入开发列。相关任务全部
               Done 后可将设计卡移入 Done。
             </p>
           </div>
@@ -624,6 +694,20 @@ export function CardDrawer(props: {
       )}
       {props.card.type === "design" && props.card.column === "done" && (
         <p className="meta">本轮设计已完成（Done）</p>
+      )}
+      {props.card.type === "task" && (
+        <>
+          {props.card.column !== "design" && (
+            <p className="design-pipeline-banner tone-wait" role="status">
+              此卡已离开设计列：拆分结构变更不会自动作用于此卡；删除需确认。
+            </p>
+          )}
+          <SplitChat
+            boardId={props.card.boardId}
+            card={props.card}
+            onSettled={props.onChanged}
+          />
+        </>
       )}
       {props.card.type === "task" && props.card.column === "accept" && (
         <button type="button" onClick={() => approveTo("done")}>

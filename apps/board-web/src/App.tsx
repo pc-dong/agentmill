@@ -43,8 +43,12 @@ export function App() {
     if (!pendingDelete) return;
     setDeleting(true);
     setDeleteError(null);
+    const needsConfirmDelete =
+      pendingDelete.type === "task" && pendingDelete.column !== "design";
     try {
-      await api.deleteCard(pendingDelete.id);
+      await api.deleteCard(pendingDelete.id, {
+        confirmDelete: needsConfirmDelete || undefined,
+      });
       if (selected?.id === pendingDelete.id) setSelected(null);
       setPendingDelete(null);
       await refresh();
@@ -54,6 +58,9 @@ export function App() {
       setDeleting(false);
     }
   }
+
+  const pendingDeleteIsInFlight =
+    pendingDelete?.type === "task" && pendingDelete.column !== "design";
 
   if (!boardId) {
     return (
@@ -188,7 +195,11 @@ export function App() {
       {pendingDelete && (
         <ConfirmDialog
           title="确认删除卡片"
-          message={`确定删除「${pendingDelete.title}」吗？评论与会话将一并删除，且不可恢复。`}
+          message={
+            pendingDeleteIsInFlight
+              ? `「${pendingDelete.title}」已离开设计列（在途）。删除会标记所属设计拆分需重新校验，且不可恢复。确认继续？`
+              : `确定删除「${pendingDelete.title}」吗？评论与会话将一并删除，且不可恢复。`
+          }
           confirmLabel="确认删除"
           cancelLabel="取消"
           danger

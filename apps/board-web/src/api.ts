@@ -33,6 +33,8 @@ export type Card = {
   status?: RequirementStatus | null;
   /** Populated for design cards. */
   requirementIds?: string[];
+  /** Design card: last successful split verify; null when dirty / never verified. */
+  splitVerifiedAt?: string | null;
 };
 
 export type SessionMessage = {
@@ -110,9 +112,26 @@ export const api = {
         body: JSON.stringify(body),
       }),
     ),
-  deleteCard: (cardId: string) =>
+  deleteCard: (cardId: string, opts?: { confirmDelete?: boolean }) =>
     json<{ ok: true; id: string }>(
-      fetch(`${base}/cards/${cardId}`, { method: "DELETE" }),
+      fetch(
+        `${base}/cards/${cardId}${
+          opts?.confirmDelete ? "?confirmDelete=true" : ""
+        }`,
+        { method: "DELETE" },
+      ),
+    ),
+  splitSettle: (cardId: string, body: { ops: unknown[] }) =>
+    json<{
+      applied: unknown[];
+      skipped: unknown[];
+      design: Card;
+    }>(
+      fetch(`${base}/cards/${cardId}/split-settle`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
     ),
   listEmployees: (boardId: string) =>
     json<
