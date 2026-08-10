@@ -21,6 +21,42 @@ function wsUrl(): string {
   return `${proto}//${location.host}/ws`;
 }
 
+type SplitSettleEntry = { kind: string; reason?: string };
+
+function formatSplitSettleFeedback(
+  applied: SplitSettleEntry[],
+  skipped: SplitSettleEntry[],
+): { statusNote: string | null; error: string | null } {
+  const suffix = "记录仍可查看；可点「继续对齐」";
+
+  if (applied.length === 0 && skipped.length === 0) {
+    return {
+      statusNote: `拆分对齐已沉淀（无协议行），${suffix}`,
+      error: null,
+    };
+  }
+
+  const skipDetail = skipped
+    .map((s) => `${s.kind}（${s.reason ?? "已跳过"}）`)
+    .join("；");
+
+  if (applied.length === 0 && skipped.length > 0) {
+    return {
+      statusNote: null,
+      error: `拆分对齐沉淀完成，但 ${skipped.length} 条协议均未应用：${skipDetail}`,
+    };
+  }
+
+  const parts = [`已应用 ${applied.length} 条协议`];
+  if (skipped.length > 0) {
+    parts.push(`跳过 ${skipped.length} 条：${skipDetail}`);
+  }
+  return {
+    statusNote: `拆分对齐已沉淀（${parts.join("；")}），${suffix}`,
+    error: null,
+  };
+}
+
 export function SplitChat(props: {
   boardId: string;
   card: Card;
@@ -256,18 +292,19 @@ export function SplitChat(props: {
       const ops = lastAssistant
         ? parseSplitSettle(lastAssistant.body)
         : [];
-      await api.splitSettle(cardId, { ops });
+      const settleResult = await api.splitSettle(cardId, { ops });
       await api.settleSession(sessionId, {
         comment: "split settle",
       });
       setHistoryOnly(true);
       setHistorySessionId(closedId);
       setSessionId(null);
-      setStatusNote(
-        ops.length > 0
-          ? `拆分对齐已沉淀（${ops.length} 条协议），记录仍可查看；可点「继续对齐」`
-          : "拆分对齐已沉淀（无协议行），记录仍可查看；可点「继续对齐」",
+      const feedback = formatSplitSettleFeedback(
+        settleResult.applied as SplitSettleEntry[],
+        settleResult.skipped as SplitSettleEntry[],
       );
+      setStatusNote(feedback.statusNote);
+      setError(feedback.error);
       props.onSettled?.();
     } catch (e) {
       setError(String(e));

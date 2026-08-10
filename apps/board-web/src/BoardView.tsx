@@ -72,6 +72,11 @@ export function BoardView(props: {
       return;
     }
 
+    const skipFrozenConfirm =
+      card.type === "task" &&
+      card.column === "design" &&
+      columnId === "dev";
+
     let humanApproved = false;
     if (needsHumanGate(card.column, columnId)) {
       const ok = window.confirm(
@@ -79,7 +84,7 @@ export function BoardView(props: {
       );
       if (!ok) return;
       humanApproved = true;
-    } else if (card.frozen) {
+    } else if (card.frozen && !skipFrozenConfirm) {
       const ok = window.confirm(
         `卡片「${card.title}」已冻结，确认仍要移动吗？`,
       );
