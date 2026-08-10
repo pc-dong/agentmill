@@ -59,9 +59,9 @@ describe("planMove", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("rejects wrong occupancy (task into design)", () => {
+  it("rejects wrong occupancy (task into requirements)", () => {
     const result = planMove(taskInAccept(), {
-      to: "design",
+      to: "requirements",
       actor: "human",
       humanApproved: true,
     });
@@ -75,5 +75,30 @@ describe("planMove", () => {
       humanApproved: true,
     });
     expect(result.ok).toBe(false);
+  });
+
+  it("rejects bot moving task from design to dev", () => {
+    const card = {
+      id: "t1",
+      type: "task" as const,
+      column: "design" as const,
+      reworkCount: 0,
+      frozen: false,
+    };
+    const r = planMove(card, { to: "dev", actor: "bot" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/human|design\s*→\s*dev/i);
+  });
+
+  it("allows human moving unfrozen task design to dev (domain only)", () => {
+    const card = {
+      id: "t1",
+      type: "task" as const,
+      column: "design" as const,
+      reworkCount: 0,
+      frozen: false,
+    };
+    const r = planMove(card, { to: "dev", actor: "human" });
+    expect(r.ok).toBe(true);
   });
 });

@@ -36,6 +36,17 @@ export function planMove(card: CardState, req: MoveRequest): MoveResult {
       reason: `Type ${card.type} cannot occupy column ${req.to}`,
     };
   }
+  if (
+    card.type === "task" &&
+    card.column === "design" &&
+    req.to === "dev" &&
+    req.actor === "bot"
+  ) {
+    return {
+      ok: false,
+      reason: "Move design → dev for tasks requires a human drag",
+    };
+  }
   if (requiresHumanGate(card.column, req.to)) {
     if (req.actor !== "human" || !req.humanApproved) {
       return {

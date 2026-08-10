@@ -17,7 +17,7 @@ const OCCUPANCY: Record<CardType, readonly ColumnId[]> = {
   epic: ["requirements"],
   // Design stays in design until related tasks are done, then may move to done.
   design: ["design", "done"],
-  task: ["dev", "test", "accept", "done"],
+  task: ["design", "dev", "test", "accept", "done"],
 };
 
 export function isColumnAllowedForType(

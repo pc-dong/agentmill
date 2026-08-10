@@ -37,6 +37,10 @@ describe("isColumnAllowedForType", () => {
   it("allows task in delivery columns", () => {
     expect(isColumnAllowedForType("task", "dev")).toBe(true);
     expect(isColumnAllowedForType("task", "done")).toBe(true);
-    expect(isColumnAllowedForType("task", "design")).toBe(false);
+    expect(isColumnAllowedForType("task", "design")).toBe(true);
+  });
+
+  it("allows task in design column", () => {
+    expect(isColumnAllowedForType("task", "design")).toBe(true);
   });
 });
