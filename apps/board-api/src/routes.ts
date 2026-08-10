@@ -913,6 +913,16 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       })
       .parse(await c.req.json());
 
+    if (body.kind === "split" || body.kind === "verify") {
+      const openSplit = sessions.getOpenSessionForCard(card.id);
+      if (openSplit?.employeeRole === "split") {
+        return c.json(
+          { error: "请先结束拆分对齐会话（settle）后再拆分/校验" },
+          409,
+        );
+      }
+    }
+
     const role =
       body.kind === "deep_dive"
         ? "design"

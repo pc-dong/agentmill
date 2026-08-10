@@ -47,10 +47,11 @@ export async function handleSessionUserMessage(
     const employeeRole =
       session.employeeRole ||
       (card.type === "requirement" ? "ba" : "design");
+    const promptRole = employeeRole === "split" ? "splitAlign" : employeeRole;
 
     for await (const event of driver.chatStream({
       workspacePath: board.workspacePath,
-      role: employeeRole,
+      role: promptRole,
       cardId: msg.cardId,
       boardId: msg.boardId,
       history,

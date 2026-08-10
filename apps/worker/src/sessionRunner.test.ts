@@ -153,6 +153,28 @@ describe("handleSessionUserMessage", () => {
     expect(seenRole).toBe("ba");
   });
 
+  it("maps split session employeeRole to splitAlign for chatStream", async () => {
+    let seenRole: string | undefined;
+    const driver: AgentDriver = {
+      id: "mock",
+      displayName: "Mock",
+      oneshot: async () => ({ status: "ok", summary: "", artifacts: [] }),
+      chatStream: async function* (input) {
+        seenRole = input.role;
+        yield { type: "done", summary: "ok" };
+      },
+    };
+
+    await handleSessionUserMessage(
+      fakeClient({ employeeRole: "split", cardType: "design", column: "design" }) as never,
+      driver,
+      { sessionId: "s1", cardId: "c1", text: "align tasks", boardId: "b1" },
+      vi.fn(),
+    );
+
+    expect(seenRole).toBe("splitAlign");
+  });
+
   it("emits agent_error on driver error event", async () => {
     const driver: AgentDriver = {
       id: "mock",

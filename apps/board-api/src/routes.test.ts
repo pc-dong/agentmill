@@ -683,6 +683,58 @@ describe("routes", () => {
     expect(bad.status).toBe(400);
   });
 
+  it("returns 409 when open split session blocks design-jobs split/verify", async () => {
+    const { app, repo, sessions } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/d" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Theme",
+      column: "requirements",
+      description: "",
+    });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "Round 1",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    sessions.createSession({
+      boardId: board.id,
+      cardId: design.id,
+      employeeRole: "split",
+    });
+
+    const split = await app.request(`http://localhost/cards/${design.id}/design-jobs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "split" }),
+    });
+    expect(split.status).toBe(409);
+    expect(await split.json()).toEqual({
+      error: "请先结束拆分对齐会话（settle）后再拆分/校验",
+    });
+
+    const verify = await app.request(`http://localhost/cards/${design.id}/design-jobs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "verify" }),
+    });
+    expect(verify.status).toBe(409);
+    expect(await verify.json()).toEqual({
+      error: "请先结束拆分对齐会话（settle）后再拆分/校验",
+    });
+
+    const deep = await app.request(`http://localhost/cards/${design.id}/design-jobs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "deep_dive", summary: "still ok" }),
+    });
+    expect(deep.status).toBe(200);
+  });
+
   it("POST split-verified marks design card verified", async () => {
     const { app, repo } = appWithRepo();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/d" });

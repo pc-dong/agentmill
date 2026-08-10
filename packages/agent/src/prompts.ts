@@ -58,7 +58,7 @@ export function buildPrompt(role: string, card: {
   column: string;
 }): string {
   const base = ROLE_PROMPTS[role] ?? "You are an AI employee assisting on a kanban card.";
-  return [
+  const lines = [
     base,
     "",
     `Card title: ${card.title}`,
@@ -69,10 +69,15 @@ export function buildPrompt(role: string, card: {
     "ARTIFACT file <relative-path> <optional label>",
     "ARTIFACT pr <url> <optional label>",
     "ARTIFACT url <url> <optional label>",
-    "",
-    "Role outcome lines (when applicable):",
-    "TASK <title> | <description> [| plan:<relpath>]",
-    "VERIFY pass | VERIFY fail",
-    "TEST pass | TEST fail",
-  ].join("\n");
+  ];
+  if (role !== "splitAlign") {
+    lines.push(
+      "",
+      "Role outcome lines (when applicable):",
+      "TASK <title> | <description> [| plan:<relpath>]",
+      "VERIFY pass | VERIFY fail",
+      "TEST pass | TEST fail",
+    );
+  }
+  return lines.join("\n");
 }
