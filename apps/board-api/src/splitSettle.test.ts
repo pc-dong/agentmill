@@ -108,6 +108,44 @@ describe("split-settle", () => {
     expect(body.applied[0].kind).toBe("create");
   });
 
+  it("update succeeds on design-column task and dirties parent", async () => {
+    const { app, repo } = appWithRepo();
+    const { design, epic, board } = designFixture(repo);
+    const sibling = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "Login API",
+      description: "old scope",
+      column: "design",
+      epicId: epic.id,
+      designId: design.id,
+      frozen: true,
+    });
+    repo.markDesignSplitVerified(design.id);
+
+    const res = await app.request(`/cards/${design.id}/split-settle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ops: [
+          {
+            kind: "update",
+            cardId: sibling.id,
+            title: "Login API v2",
+            description: "revised scope",
+          },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.applied).toHaveLength(1);
+    expect(body.applied[0].kind).toBe("update");
+    expect(body.skipped).toHaveLength(0);
+    expect(repo.getCard(sibling.id)!.title).toBe("Login API v2");
+    expect(body.design.splitVerifiedAt).toBeNull();
+  });
+
   it("update skips in-flight task not in design column", async () => {
     const { app, repo } = appWithRepo();
     const { design, epic, board } = designFixture(repo);
@@ -144,6 +182,37 @@ describe("split-settle", () => {
     expect(body.skipped[0].reason).toMatch(/design/i);
     expect(repo.getCard(inflight.id)!.title).toBe("In dev");
     expect(repo.getCard(design.id)!.splitVerifiedAt).toBeTruthy();
+  });
+
+  it("delete succeeds on design-column task without confirmDelete and dirties parent", async () => {
+    const { app, repo } = appWithRepo();
+    const { design, epic, board } = designFixture(repo);
+    const sibling = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "Login API",
+      description: "",
+      column: "design",
+      epicId: epic.id,
+      designId: design.id,
+      frozen: true,
+    });
+    repo.markDesignSplitVerified(design.id);
+
+    const res = await app.request(`/cards/${design.id}/split-settle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ops: [{ kind: "delete", cardId: sibling.id }],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.applied).toHaveLength(1);
+    expect(body.applied[0].kind).toBe("delete");
+    expect(body.skipped).toHaveLength(0);
+    expect(repo.getCard(sibling.id)).toBeNull();
+    expect(body.design.splitVerifiedAt).toBeNull();
   });
 
   it("delete skips in-flight task without confirmDelete", async () => {
@@ -220,6 +289,38 @@ describe("split-settle", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.design.splitVerifiedAt).toBeNull();
+  });
+
+  it("structural create re-freezes unverified sibling in design column", async () => {
+    const { app, repo } = appWithRepo();
+    const { design, epic, board } = designFixture(repo);
+    const sibling = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "Existing",
+      description: "",
+      column: "design",
+      epicId: epic.id,
+      designId: design.id,
+      frozen: true,
+    });
+    repo.markDesignSplitVerified(design.id);
+    repo.updateCard(sibling.id, { frozen: false });
+    expect(repo.getCard(sibling.id)!.frozen).toBe(false);
+
+    const res = await app.request(`/cards/${design.id}/split-settle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ops: [{ kind: "create", title: "New task", description: "scope" }],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.applied).toHaveLength(1);
+    expect(body.applied[0].kind).toBe("create");
+    expect(body.design.splitVerifiedAt).toBeNull();
+    expect(repo.getCard(sibling.id)!.frozen).toBe(true);
   });
 
   it("note alone does not dirty verify state", async () => {
