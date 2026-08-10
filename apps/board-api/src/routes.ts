@@ -303,6 +303,24 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     return c.json({ ok: true, id: cardId });
   });
 
+  app.post("/cards/:cardId/split-verified", (c) => {
+    const card = repo.getCard(c.req.param("cardId"));
+    if (!card || card.type !== "design") {
+      return c.json({ error: "not found" }, 404);
+    }
+    repo.markDesignSplitVerified(card.id);
+    return c.json(repo.getCard(card.id));
+  });
+
+  app.post("/cards/:cardId/split-dirty", (c) => {
+    const card = repo.getCard(c.req.param("cardId"));
+    if (!card || card.type !== "design") {
+      return c.json({ error: "not found" }, 404);
+    }
+    repo.markDesignSplitDirty(card.id);
+    return c.json(repo.getCard(card.id));
+  });
+
   app.post("/cards/:cardId/move", async (c) => {
     const card = repo.getCard(c.req.param("cardId"));
     if (!card) return c.json({ error: "not found" }, 404);

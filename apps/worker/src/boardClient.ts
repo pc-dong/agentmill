@@ -188,6 +188,14 @@ export class BoardClient {
     await this.postJson(`/cards/${cardId}/comments`, { author, body });
   }
 
+  async markDesignSplitVerified(designId: string): Promise<void> {
+    await this.postJson(`/cards/${designId}/split-verified`, {});
+  }
+
+  async markDesignSplitDirty(designId: string): Promise<void> {
+    await this.postJson(`/cards/${designId}/split-dirty`, {});
+  }
+
   async baSettle(
     cardId: string,
     body: {

@@ -682,4 +682,88 @@ describe("routes", () => {
     });
     expect(bad.status).toBe(400);
   });
+
+  it("POST split-verified marks design card verified", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/d" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Theme",
+      column: "requirements",
+      description: "",
+    });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "Round 1",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    expect(repo.getCard(design.id)!.splitVerifiedAt).toBeNull();
+
+    const res = await app.request(
+      `http://localhost/cards/${design.id}/split-verified`,
+      { method: "POST" },
+    );
+    expect(res.status).toBe(200);
+    expect(repo.getCard(design.id)!.splitVerifiedAt).toBeTruthy();
+  });
+
+  it("POST split-dirty clears verified and re-freezes design-column tasks", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/d" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Theme",
+      column: "requirements",
+      description: "",
+    });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "Round 1",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T1",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+      designId: design.id,
+      frozen: false,
+    });
+    repo.markDesignSplitVerified(design.id);
+
+    const res = await app.request(
+      `http://localhost/cards/${design.id}/split-dirty`,
+      { method: "POST" },
+    );
+    expect(res.status).toBe(200);
+    expect(repo.getCard(design.id)!.splitVerifiedAt).toBeNull();
+    expect(repo.getCard(task.id)!.frozen).toBe(true);
+  });
+
+  it("POST split-verified returns 404 for non-design cards", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/d" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "Theme",
+      column: "requirements",
+      description: "",
+    });
+    const res = await app.request(
+      `http://localhost/cards/${epic.id}/split-verified`,
+      { method: "POST" },
+    );
+    expect(res.status).toBe(404);
+  });
 });

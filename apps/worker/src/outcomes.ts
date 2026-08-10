@@ -43,6 +43,8 @@ export type OutcomeBoardClient = {
   >;
   postTestResult(cardId: string, passed: boolean): Promise<unknown>;
   postComment(cardId: string, author: string, body: string): Promise<unknown>;
+  markDesignSplitVerified?(designId: string): Promise<unknown>;
+  markDesignSplitDirty?(designId: string): Promise<unknown>;
 };
 
 function planArtifactsFromSummary(
@@ -102,12 +104,15 @@ export async function applyRoleOutcome(
           type: "task",
           title: task.title,
           description: descParts.filter(Boolean).join("\n"),
-          column: "dev",
+          column: "design",
           epicId: themeEpicId,
           designId: ctx.cardId,
           frozen: true,
           artifacts,
         });
+      }
+      if (outcome.tasks.length > 0 && client.markDesignSplitDirty) {
+        await client.markDesignSplitDirty(ctx.cardId);
       }
       await client.postComment(
         ctx.cardId,
@@ -136,10 +141,14 @@ export async function applyRoleOutcome(
             if (
               t.type === "task" &&
               t.designId === ctx.cardId &&
-              t.frozen
+              t.frozen &&
+              t.column === "design"
             ) {
               await client.updateCard(t.id, { frozen: false });
             }
+          }
+          if (client.markDesignSplitVerified) {
+            await client.markDesignSplitVerified(ctx.cardId);
           }
           await client.postComment(
             ctx.cardId,

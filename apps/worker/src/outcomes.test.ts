@@ -10,6 +10,8 @@ function fakeClient(
   listCards: ReturnType<typeof vi.fn>;
   postTestResult: ReturnType<typeof vi.fn>;
   postComment: ReturnType<typeof vi.fn>;
+  markDesignSplitVerified: ReturnType<typeof vi.fn>;
+  markDesignSplitDirty: ReturnType<typeof vi.fn>;
 } {
   return {
     createCard: overrides.createCard ?? vi.fn(async () => ({ id: "new" })),
@@ -18,6 +20,10 @@ function fakeClient(
     listCards: overrides.listCards ?? vi.fn(async () => []),
     postTestResult: overrides.postTestResult ?? vi.fn(async () => {}),
     postComment: overrides.postComment ?? vi.fn(async () => {}),
+    markDesignSplitVerified:
+      overrides.markDesignSplitVerified ?? vi.fn(async () => {}),
+    markDesignSplitDirty:
+      overrides.markDesignSplitDirty ?? vi.fn(async () => {}),
   };
 }
 
@@ -63,13 +69,14 @@ describe("applyRoleOutcome", () => {
         expect.objectContaining({
           type: "task",
           title: "Login API",
-          column: "dev",
+          column: "design",
           epicId: "epic1",
           designId: "design1",
           frozen: true,
         }),
       );
       expect(client.moveCard).not.toHaveBeenCalled();
+      expect(client.markDesignSplitDirty).toHaveBeenCalledWith("design1");
       expect(client.postComment).toHaveBeenCalledWith(
         "design1",
         "bot",
@@ -95,28 +102,32 @@ describe("applyRoleOutcome", () => {
   });
 
   describe("verify", () => {
-    it("unfreezes related tasks on pass", async () => {
+    it("verify pass unfreezes design-column tasks and marks verified", async () => {
+      const updateCard = vi.fn(async () => ({}));
       const client = fakeClient({
         listCards: vi.fn(async () => [
           {
             id: "t1",
             type: "task",
             designId: "design1",
-            column: "dev",
             frozen: true,
+            column: "design",
           },
           {
             id: "t2",
             type: "task",
-            designId: "other",
-            column: "dev",
+            designId: "design1",
             frozen: true,
+            column: "dev",
           },
         ]),
+        updateCard,
+        markDesignSplitVerified: vi.fn(async () => {}),
       });
       await applyRoleOutcome("verify", "VERIFY pass", designCtx, client);
-      expect(client.updateCard).toHaveBeenCalledWith("t1", { frozen: false });
-      expect(client.updateCard).not.toHaveBeenCalledWith("t2", expect.anything());
+      expect(updateCard).toHaveBeenCalledWith("t1", { frozen: false });
+      expect(updateCard).not.toHaveBeenCalledWith("t2", expect.anything());
+      expect(client.markDesignSplitVerified).toHaveBeenCalledWith("design1");
     });
 
     it("comments on fail without unfreeze", async () => {

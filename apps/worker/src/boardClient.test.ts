@@ -301,6 +301,32 @@ describe("BoardClient", () => {
     await client().postComment("c1", "bot", "hello");
   });
 
+  it("markDesignSplitVerified POSTs split-verified", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        expect(url).toBe(`${API}/cards/design1/split-verified`);
+        expect(init?.method).toBe("POST");
+        return new Response(JSON.stringify({ id: "design1" }), { status: 200 });
+      }),
+    );
+
+    await client().markDesignSplitVerified("design1");
+  });
+
+  it("markDesignSplitDirty POSTs split-dirty", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        expect(url).toBe(`${API}/cards/design1/split-dirty`);
+        expect(init?.method).toBe("POST");
+        return new Response(JSON.stringify({ id: "design1" }), { status: 200 });
+      }),
+    );
+
+    await client().markDesignSplitDirty("design1");
+  });
+
   it("baSettle POSTs settle body to /cards/:id/ba-settle", async () => {
     const body = {
       mode: "create" as const,
