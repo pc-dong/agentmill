@@ -1,6 +1,7 @@
 export * from "./types.js";
 export * from "./parse.js";
 export * from "./parseBaSettle.js";
+export * from "./parseSplitSettle.js";
 export * from "./parseOutcome.js";
 export * from "./mock.js";
 export * from "./cursor.js";

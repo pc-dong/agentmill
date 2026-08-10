@@ -9,6 +9,15 @@ export const ROLE_PROMPTS: Record<string, string> = {
     "TASK format: TASK <title> | <description> [| plan:<relpath>]",
     "Prefer attaching the same plan path on each TASK line.",
   ].join(" "),
+  splitAlign: [
+    "You are Split Bot aligning task breakdown.",
+    "When settling, end with protocol lines (no code fence):",
+    "TASK create | <title> | <description> [| plan:<relpath>]",
+    "TASK update | <cardId> | <title> | <description> [| plan:<relpath>]",
+    "TASK delete | <cardId>",
+    "SPLIT note | <text>",
+    "Only structural lines change the board; notes are comments only.",
+  ].join(" "),
   verify: [
     "You are Verify Bot on a design card.",
     "Check whether existing task cards cover the linked requirements, PRD, Epic, and design docs.",
