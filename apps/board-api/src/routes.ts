@@ -5,6 +5,7 @@ import {
   applyTestFailure,
   isColumnAllowedForType,
   planMove,
+  type ArtifactRef,
   type ColumnId,
   type CardType,
   type HumanDecision,
@@ -936,6 +937,191 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       payload: body.summary?.trim() || defaultSummary,
     });
     return c.json({ job });
+  });
+
+  const splitSettleOpSchema = z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("create"),
+      title: z.string().min(1),
+      description: z.string(),
+      planPath: z.string().optional(),
+    }),
+    z.object({
+      kind: z.literal("update"),
+      cardId: z.string().min(1),
+      title: z.string().min(1),
+      description: z.string(),
+      planPath: z.string().optional(),
+    }),
+    z.object({
+      kind: z.literal("delete"),
+      cardId: z.string().min(1),
+      confirmDelete: z.boolean().optional(),
+    }),
+    z.object({
+      kind: z.literal("note"),
+      text: z.string().min(1),
+    }),
+  ]);
+
+  function taskDescription(description: string, planPath?: string): string {
+    const parts = [description];
+    if (planPath) parts.push(`plan: ${planPath}`);
+    return parts.filter(Boolean).join("\n");
+  }
+
+  function taskPlanArtifacts(planPath?: string): ArtifactRef[] {
+    return planPath
+      ? [{ kind: "file", href: planPath, label: "Plan" }]
+      : [];
+  }
+
+  app.post("/cards/:cardId/split-settle", async (c) => {
+    const card = repo.getCard(c.req.param("cardId"));
+    if (!card) return c.json({ error: "not found" }, 404);
+
+    let designId: string | null = null;
+    if (card.type === "design") {
+      designId = card.id;
+    } else if (card.type === "task" && card.designId) {
+      designId = card.designId;
+    } else {
+      return c.json({ error: "not found" }, 404);
+    }
+
+    const design = repo.getCard(designId);
+    if (!design || design.type !== "design") {
+      return c.json({ error: "not found" }, 404);
+    }
+
+    const body = z
+      .object({ ops: z.array(splitSettleOpSchema).default([]) })
+      .parse(await c.req.json());
+
+    type AppliedEntry =
+      | { kind: "create"; cardId: string; title: string }
+      | { kind: "update"; cardId: string; title: string }
+      | { kind: "delete"; cardId: string }
+      | { kind: "note"; text: string };
+    type SkippedEntry = {
+      kind: "create" | "update" | "delete" | "note";
+      cardId?: string;
+      reason: string;
+    };
+
+    const applied: AppliedEntry[] = [];
+    const skipped: SkippedEntry[] = [];
+    let structuralApplied = false;
+
+    for (const op of body.ops) {
+      if (op.kind === "create") {
+        const created = repo.createCard({
+          boardId: design.boardId,
+          type: "task",
+          title: op.title,
+          description: taskDescription(op.description, op.planPath),
+          column: "design",
+          epicId: design.epicId,
+          designId: design.id,
+          frozen: true,
+          artifacts: taskPlanArtifacts(op.planPath),
+        });
+        applied.push({ kind: "create", cardId: created.id, title: created.title });
+        structuralApplied = true;
+        continue;
+      }
+
+      if (op.kind === "note") {
+        repo.addComment({
+          cardId: card.id,
+          author: "split",
+          body: op.text,
+        });
+        applied.push({ kind: "note", text: op.text });
+        continue;
+      }
+
+      const target = repo.getCard(op.cardId);
+      if (
+        !target ||
+        target.type !== "task" ||
+        target.designId !== designId ||
+        target.boardId !== design.boardId
+      ) {
+        skipped.push({
+          kind: op.kind,
+          cardId: op.cardId,
+          reason: "target task not found for this design",
+        });
+        continue;
+      }
+
+      if (op.kind === "update") {
+        if (target.column !== "design") {
+          repo.addComment({
+            cardId: card.id,
+            author: "split",
+            body: `[split-settle] skipped update on ${target.id}: task left design column (${target.column})`,
+          });
+          skipped.push({
+            kind: "update",
+            cardId: target.id,
+            reason: "task not in design column; in-flight updates are skipped",
+          });
+          continue;
+        }
+        const updated = repo.updateCard(target.id, {
+          title: op.title,
+          description: taskDescription(op.description, op.planPath),
+          ...(op.planPath !== undefined
+            ? { artifacts: taskPlanArtifacts(op.planPath) }
+            : {}),
+        });
+        applied.push({
+          kind: "update",
+          cardId: updated.id,
+          title: updated.title,
+        });
+        structuralApplied = true;
+        continue;
+      }
+
+      if (op.kind === "delete") {
+        if (target.column !== "design" && !op.confirmDelete) {
+          repo.addComment({
+            cardId: card.id,
+            author: "split",
+            body: `[split-settle] delete ${target.id} requires confirmDelete (task in ${target.column})`,
+          });
+          skipped.push({
+            kind: "delete",
+            cardId: target.id,
+            reason: "in-flight delete requires confirmDelete",
+          });
+          continue;
+        }
+        if (!repo.deleteCard(target.id)) {
+          skipped.push({
+            kind: "delete",
+            cardId: target.id,
+            reason: "delete failed",
+          });
+          continue;
+        }
+        applied.push({ kind: "delete", cardId: target.id });
+        structuralApplied = true;
+      }
+    }
+
+    if (structuralApplied) {
+      repo.markDesignSplitDirty(designId);
+    }
+
+    return c.json({
+      applied,
+      skipped,
+      design: repo.getCard(designId),
+    });
   });
 
   return app;
