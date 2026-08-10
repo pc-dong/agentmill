@@ -714,7 +714,9 @@ export function CardDrawer(props: {
           人批：验收 → Done
         </button>
       )}
-      {props.card.frozen && (
+      {props.card.frozen &&
+        props.card.type === "task" &&
+        props.card.column === "test" && (
         <div>
           <button
             type="button"

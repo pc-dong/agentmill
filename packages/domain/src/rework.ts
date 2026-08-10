@@ -49,6 +49,15 @@ export function applyHumanDecision(
   if (card.type !== "task") {
     return { ok: false, reason: "Only task cards support rework decisions" };
   }
+  // Rework human-decisions only apply to frozen tasks in test (not design-column
+  // freeze-for-verify, which must go through Verify before design→dev).
+  if (card.column !== "test") {
+    return {
+      ok: false,
+      reason:
+        "Human rework decisions only apply to frozen tasks in test column",
+    };
+  }
   if (decision === "return_dev") {
     return {
       ok: true,

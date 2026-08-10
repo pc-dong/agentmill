@@ -96,7 +96,7 @@ describe("executeClaimedJob", () => {
     expect(failJob).toHaveBeenCalledWith("j1", "agent failed");
   });
 
-  it("calls applyRoleOutcome after completeJob for split role", async () => {
+  it("calls applyRoleOutcome before completeJob for split role", async () => {
     const createCard = vi.fn(async () => ({}));
     const moveCard = vi.fn(async () => ({}));
     const completeJob = vi.fn(async () => {});
@@ -146,9 +146,12 @@ describe("executeClaimedJob", () => {
     expect(completeJob).toHaveBeenCalledOnce();
     expect(createCard).toHaveBeenCalledOnce();
     expect(moveCard).not.toHaveBeenCalled();
+    expect(createCard.mock.invocationCallOrder[0]!).toBeLessThan(
+      completeJob.mock.invocationCallOrder[0]!,
+    );
   });
 
-  it("does not failJob when applyRoleOutcome throws after completeJob", async () => {
+  it("calls failJob when applyRoleOutcome throws before completeJob", async () => {
     const completeJob = vi.fn(async () => {});
     const failJob = vi.fn(async () => {});
     const postComment = vi.fn(async () => {});
@@ -162,13 +165,9 @@ describe("executeClaimedJob", () => {
       job,
     );
 
-    expect(completeJob).toHaveBeenCalledOnce();
-    expect(failJob).not.toHaveBeenCalled();
-    expect(postComment).toHaveBeenCalledWith(
-      "c1",
-      "bot",
-      "Warning: role outcome failed after job completed: outcome boom",
-    );
+    expect(completeJob).not.toHaveBeenCalled();
+    expect(failJob).toHaveBeenCalledOnce();
+    expect(failJob).toHaveBeenCalledWith("j1", "outcome boom");
   });
 
   describe("ba settle / deep_dive", () => {

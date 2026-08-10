@@ -479,6 +479,140 @@ describe("routes", () => {
     });
   });
 
+  it("blocks human design→dev with humanApproved when splitVerifiedAt missing", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "requirements",
+      description: "",
+    });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "D",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+      designId: design.id,
+      frozen: false,
+    });
+
+    const res = await app.request(`http://localhost/cards/${task.id}/move`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        to: "dev",
+        actor: "human",
+        humanApproved: true,
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: expect.stringMatching(/校验|verif|拆分/i),
+    });
+  });
+
+  it("blocks human design→dev when frozen even with humanApproved", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "requirements",
+      description: "",
+    });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "D",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+      designId: design.id,
+      frozen: true,
+    });
+    repo.markDesignSplitVerified(design.id);
+
+    const res = await app.request(`http://localhost/cards/${task.id}/move`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        to: "dev",
+        actor: "human",
+        humanApproved: true,
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: expect.stringMatching(/冻结|frozen/i),
+    });
+  });
+
+  it("rejects human-decision return_dev for frozen design-column task", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "requirements",
+      description: "",
+    });
+    const design = repo.createCard({
+      boardId: board.id,
+      type: "design",
+      title: "D",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+    });
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      column: "design",
+      description: "",
+      epicId: epic.id,
+      designId: design.id,
+      frozen: true,
+    });
+
+    const res = await app.request(
+      `http://localhost/cards/${task.id}/human-decision`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ decision: "return_dev" }),
+      },
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: expect.stringMatching(/test column/i),
+    });
+    expect(repo.getCard(task.id)?.column).toBe("design");
+    expect(repo.getCard(task.id)?.frozen).toBe(true);
+  });
+
   it("allows human design→dev after verify mark", async () => {
     const { app, repo } = appWithRepo();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });

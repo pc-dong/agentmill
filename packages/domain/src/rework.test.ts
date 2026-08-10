@@ -47,6 +47,35 @@ describe("applyHumanDecision", () => {
     }
   });
 
+  it("rejects return_dev for frozen task in design (verify gate)", () => {
+    const card: CardState = {
+      id: "t1",
+      type: "task",
+      column: "design",
+      reworkCount: 0,
+      frozen: true,
+      epicId: "e1",
+    };
+    const result = applyHumanDecision(card, "return_dev");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toMatch(/test column/i);
+    }
+  });
+
+  it("rejects force_accept and close_done outside test column", () => {
+    const card: CardState = {
+      id: "t1",
+      type: "task",
+      column: "design",
+      reworkCount: 0,
+      frozen: true,
+      epicId: "e1",
+    };
+    expect(applyHumanDecision(card, "force_accept").ok).toBe(false);
+    expect(applyHumanDecision(card, "close_done").ok).toBe(false);
+  });
+
   it("force_accept moves frozen card to accept", () => {
     const result = applyHumanDecision(taskInTest(3, true), "force_accept");
     expect(result.ok).toBe(true);

@@ -194,9 +194,11 @@ describe("applyRoleOutcome", () => {
       expect(client.moveCard).toHaveBeenCalledWith("task1", "test", "bot");
     });
 
-    it("warns and does not move without SUMMARY", async () => {
+    it("warns, throws, and does not move without SUMMARY", async () => {
       const client = fakeClient();
-      await applyRoleOutcome("dev", "done", taskCtx, client);
+      await expect(
+        applyRoleOutcome("dev", "done", taskCtx, client),
+      ).rejects.toThrow(/missing SUMMARY/i);
       expect(client.postComment).toHaveBeenCalledWith(
         "task1",
         "bot",
@@ -207,15 +209,17 @@ describe("applyRoleOutcome", () => {
 
     it("does not move with PR alone without SUMMARY", async () => {
       const client = fakeClient();
-      await applyRoleOutcome(
-        "dev",
-        "ARTIFACT pr https://example.com/pr/1 PR",
-        {
-          ...taskCtx,
-          artifacts: [{ kind: "pr", href: "https://example.com/pr/1" }],
-        },
-        client,
-      );
+      await expect(
+        applyRoleOutcome(
+          "dev",
+          "ARTIFACT pr https://example.com/pr/1 PR",
+          {
+            ...taskCtx,
+            artifacts: [{ kind: "pr", href: "https://example.com/pr/1" }],
+          },
+          client,
+        ),
+      ).rejects.toThrow(/missing SUMMARY/i);
       expect(client.postComment).toHaveBeenCalledWith(
         "task1",
         "bot",

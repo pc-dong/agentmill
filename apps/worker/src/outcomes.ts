@@ -182,7 +182,7 @@ export async function applyRoleOutcome(
           "bot",
           "Warning: missing SUMMARY: line; not moving to test",
         );
-        return;
+        throw new Error("missing SUMMARY: line; not moving to test");
       }
       await client.postComment(
         ctx.cardId,

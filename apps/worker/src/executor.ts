@@ -154,37 +154,35 @@ export async function executeClaimedJob(
       return;
     }
     const artifacts = mapArtifacts(result.artifacts);
-    await client.completeJob(job.id, {
-      summary: result.summary,
-      artifacts,
-    });
 
     if (isBaPath) {
+      await client.completeJob(job.id, {
+        summary: result.summary,
+        artifacts,
+      });
       await client.postComment(card.id, "bot", result.summary);
       return;
     }
 
-    try {
-      await applyRoleOutcome(
-        employee.role,
-        result.summary,
-        {
-          cardId: card.id,
-          cardType: card.type,
-          cardColumn: card.column,
-          epicId: card.epicId,
-          artifacts,
-        },
-        client,
-      );
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      await client.postComment(
-        card.id,
-        "bot",
-        `Warning: role outcome failed after job completed: ${message}`,
-      );
-    }
+    // Apply role outcomes while job is still claimed so failures (e.g. missing
+    // Dev SUMMARY) can failJob instead of silently succeeding after complete.
+    await applyRoleOutcome(
+      employee.role,
+      result.summary,
+      {
+        cardId: card.id,
+        cardType: card.type,
+        cardColumn: card.column,
+        epicId: card.epicId,
+        artifacts,
+      },
+      client,
+    );
+
+    await client.completeJob(job.id, {
+      summary: result.summary,
+      artifacts,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await client.failJob(job.id, message);
