@@ -319,8 +319,9 @@ export function BoardView(props: {
         })}
       </div>
       <p className="board-hint meta">
-        Epic 固定需求列；拆分任务落在待办列，校验通过后可拖入开发。也可直接新建任务到待办列再拖入开发。设计卡用侧栏「拆分对齐/校验」。相关任务全部
-        Done 后可将设计卡拖到 Done（需确认）。验收→Done 也需确认。
+        Epic / 需求固定在需求列（不能拖到 Done）。需求完成看卡片上的状态徽章：关联设计与任务都
+        Done 后会自动变为「完成」；也可在侧栏手动改状态。拆分任务落在待办列，校验通过后可拖入开发。设计卡相关任务全部
+        Done 后可拖到 Done（需确认）。验收→Done 也需确认。
       </p>
       {preview && (
         <DocPreviewModal

@@ -405,6 +405,7 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       author: body.actor,
       body: `[audit] ${result.audit}`,
     });
+    repo.syncRequirementStatusesForCard(updated);
     return c.json(updated);
   });
 
@@ -431,6 +432,7 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
         author: "bot",
         body: `[audit] ${result.audit}`,
       });
+      repo.syncRequirementStatusesForCard(updated);
       return c.json(updated);
     }
     if (card.type !== "task" || card.column !== "test") {
@@ -459,6 +461,7 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       author: "bot",
       body: `[audit] ${failure.audit}`,
     });
+    repo.syncRequirementStatusesForCard(updated);
     return c.json(updated);
   });
 
@@ -492,6 +495,7 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       author: "human",
       body: `[audit] ${result.audit}`,
     });
+    repo.syncRequirementStatusesForCard(updated);
     return c.json(updated);
   });
 

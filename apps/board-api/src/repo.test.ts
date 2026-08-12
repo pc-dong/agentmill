@@ -707,6 +707,97 @@ describe("BoardRepo", () => {
     expect(repo.getCard(req.id)!.status).toBe("in_progress");
   });
 
+  it("syncRequirementStatus marks done when designs and tasks are Done", () => {
+    const { repo } = tempDb();
+    const board = repo.createBoard({ name: "b", workspacePath: "/tmp/x" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      description: "",
+      column: "requirements",
+    });
+    const req = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "R",
+      description: "",
+      column: "requirements",
+      epicId: epic.id,
+      status: "open",
+    });
+    const design = repo.createDesignRound({
+      boardId: board.id,
+      epicId: epic.id,
+      title: "D",
+      requirementIds: [req.id],
+    });
+    expect(repo.getCard(req.id)!.status).toBe("in_progress");
+
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      description: "",
+      column: "design",
+      designId: design.id,
+      epicId: epic.id,
+    });
+
+    repo.updateCard(task.id, { column: "done" });
+    repo.updateCard(design.id, { column: "done" });
+    repo.syncRequirementStatusesForCard(repo.getCard(design.id)!);
+    expect(repo.getCard(req.id)!.status).toBe("done");
+
+    repo.updateCard(task.id, { column: "dev" });
+    repo.syncRequirementStatusesForCard(repo.getCard(task.id)!);
+    expect(repo.getCard(req.id)!.status).toBe("in_progress");
+  });
+
+  it("listCards repairs stuck requirement status", () => {
+    const { repo } = tempDb();
+    const board = repo.createBoard({ name: "b", workspacePath: "/tmp/x" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      description: "",
+      column: "requirements",
+    });
+    const req = repo.createCard({
+      boardId: board.id,
+      type: "requirement",
+      title: "R",
+      description: "",
+      column: "requirements",
+      epicId: epic.id,
+      status: "in_progress",
+    });
+    const design = repo.createDesignRound({
+      boardId: board.id,
+      epicId: epic.id,
+      title: "D",
+      requirementIds: [req.id],
+    });
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      description: "",
+      column: "done",
+      designId: design.id,
+      epicId: epic.id,
+    });
+    repo.updateCard(design.id, { column: "done" });
+    // Simulate pre-fix stuck state: delivery done but status not synced.
+    expect(repo.getCard(req.id)!.status).toBe("in_progress");
+    expect(repo.getCard(task.id)!.column).toBe("done");
+
+    const cards = repo.listCards(board.id);
+    const synced = cards.find((c) => c.id === req.id)!;
+    expect(synced.status).toBe("done");
+  });
+
   it("markDesignSplitVerified and Dirty round-trip", () => {
     const { repo } = tempDb();
     const board = repo.createBoard({ name: "b", workspacePath: "/tmp/x" });

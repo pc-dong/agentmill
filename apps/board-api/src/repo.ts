@@ -305,6 +305,9 @@ export class BoardRepo {
   }
 
   listCards(boardId: string): CardRecord[] {
+    // Keep requirement.status aligned with linked design/task Done state.
+    // Also repairs cards stuck at in_progress after delivery already finished.
+    this.syncRequirementStatusesForBoard(boardId);
     const rows = this.db
       .prepare(`SELECT id FROM cards WHERE board_id = ? ORDER BY created_at`)
       .all(boardId) as Array<{ id: string }>;
@@ -436,6 +439,71 @@ export class BoardRepo {
     const tasks = this.listTasksForDesign(designId);
     if (tasks.length === 0) return false;
     return tasks.every((t) => t.column === "done");
+  }
+
+  /** Design card is Done and every linked task (if any) is Done. */
+  isDesignDeliveryComplete(designId: string): boolean {
+    const design = this.getCard(designId);
+    if (!design || design.type !== "design" || design.column !== "done") {
+      return false;
+    }
+    return this.listTasksForDesign(designId).every((t) => t.column === "done");
+  }
+
+  /**
+   * When all linked design rounds (and their tasks) are Done, mark the
+   * requirement status done; if work reopens, revert done → in_progress.
+   */
+  syncRequirementStatus(requirementId: string): CardRecord | null {
+    const req = this.getCard(requirementId);
+    if (!req || req.type !== "requirement") return null;
+    const designIds = this.listDesignIdsForRequirement(requirementId);
+    if (designIds.length === 0) return req;
+
+    const allComplete = designIds.every((id) =>
+      this.isDesignDeliveryComplete(id),
+    );
+    if (allComplete) {
+      if (req.status !== "done") {
+        return this.updateCard(requirementId, { status: "done" });
+      }
+      return req;
+    }
+    if (req.status === "done") {
+      return this.updateCard(requirementId, { status: "in_progress" });
+    }
+    return req;
+  }
+
+  /** After a design/task column change, refresh linked requirement statuses. */
+  syncRequirementStatusesForCard(card: {
+    type: string;
+    id: string;
+    designId?: string | null;
+  }): void {
+    if (card.type === "design") {
+      for (const rid of this.listRequirementIdsForDesign(card.id)) {
+        this.syncRequirementStatus(rid);
+      }
+      return;
+    }
+    if (card.type === "task" && card.designId) {
+      for (const rid of this.listRequirementIdsForDesign(card.designId)) {
+        this.syncRequirementStatus(rid);
+      }
+    }
+  }
+
+  /** Reconcile all requirement statuses on a board (also repairs stuck cards). */
+  syncRequirementStatusesForBoard(boardId: string): void {
+    const rows = this.db
+      .prepare(
+        `SELECT id FROM cards WHERE board_id = ? AND type = 'requirement'`,
+      )
+      .all(boardId) as Array<{ id: string }>;
+    for (const row of rows) {
+      this.syncRequirementStatus(row.id);
+    }
   }
 
   listDesignIdsForRequirement(requirementId: string): string[] {

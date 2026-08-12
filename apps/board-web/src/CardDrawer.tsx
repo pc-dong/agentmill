@@ -583,6 +583,10 @@ export function CardDrawer(props: {
             <option value="in_progress">进行中 (in_progress)</option>
             <option value="done">完成 (done)</option>
           </select>
+          <span className="meta">
+            需求卡留在「需求」列，不能拖到 Done。关联设计与任务都 Done
+            后会自动变为「完成」；也可在此手动修改后点保存。
+          </span>
         </label>
       )}
       {props.card.type !== "epic" && props.card.type !== "design" && (
