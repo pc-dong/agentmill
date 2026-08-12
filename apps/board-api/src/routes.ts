@@ -499,7 +499,11 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     const card = repo.getCard(c.req.param("cardId"));
     if (!card) return c.json({ error: "not found" }, 404);
     const body = z
-      .object({ author: z.string().min(1), body: z.string().min(1) })
+      .object({
+        author: z.string().min(1),
+        body: z.string().min(1),
+        includeCommentHistory: z.boolean().optional(),
+      })
       .parse(await c.req.json());
     const comment = repo.addComment({
       cardId: card.id,
@@ -517,6 +521,11 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
           cardId: card.id,
           employeeId: emp.id,
           trigger: "mention",
+          payload: JSON.stringify({
+            mentionBody: body.body,
+            includeCommentHistory: Boolean(body.includeCommentHistory),
+            triggerCommentId: comment.id,
+          }),
         });
       }
     }

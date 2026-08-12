@@ -184,12 +184,21 @@ export const api = {
     json<Array<{ id: string; author: string; body: string; createdAt: string }>>(
       fetch(`${base}/cards/${cardId}/comments`),
     ),
-  addComment: (cardId: string, author: string, body: string) =>
+  addComment: (
+    cardId: string,
+    author: string,
+    body: string,
+    opts?: { includeCommentHistory?: boolean },
+  ) =>
     json(
       fetch(`${base}/cards/${cardId}/comments`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ author, body }),
+        body: JSON.stringify({
+          author,
+          body,
+          includeCommentHistory: opts?.includeCommentHistory,
+        }),
       }),
     ),
   createSession: (boardId: string, cardId: string, employeeRole = "design") =>

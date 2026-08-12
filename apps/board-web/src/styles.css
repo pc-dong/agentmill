@@ -501,7 +501,21 @@ body { margin: 0; }
 }
 .comment-composer-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.comment-history-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #57534e;
+  cursor: pointer;
+  user-select: none;
+}
+.comment-history-opt input {
+  margin: 0;
 }
 .comment-send {
   padding: 6px 14px;

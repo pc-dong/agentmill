@@ -17,6 +17,7 @@ function fakeClient(overrides: {
   completeJob?: ReturnType<typeof vi.fn>;
   failJob?: ReturnType<typeof vi.fn>;
   setJobProgress?: ReturnType<typeof vi.fn>;
+  listComments?: ReturnType<typeof vi.fn>;
   listCards?: ReturnType<typeof vi.fn>;
   moveCard?: ReturnType<typeof vi.fn>;
   createCard?: ReturnType<typeof vi.fn>;
@@ -58,6 +59,7 @@ function fakeClient(overrides: {
     completeJob: overrides.completeJob ?? vi.fn(async () => {}),
     failJob: overrides.failJob ?? vi.fn(async () => {}),
     setJobProgress: overrides.setJobProgress ?? vi.fn(async () => {}),
+    listComments: overrides.listComments ?? vi.fn(async () => []),
     baSettle: overrides.baSettle ?? vi.fn(async () => ({})),
   };
 }
@@ -109,6 +111,48 @@ describe("executeClaimedJob", () => {
         "写回结果…",
       ]),
     );
+  });
+
+  it("mention trigger injects user message and optional filtered history", async () => {
+    const listComments = vi.fn(async () => [
+      { id: "c0", author: "human", body: "先做登录" },
+      {
+        id: "c1",
+        author: "Dev Bot",
+        body: `${"x".repeat(300)}\nSUMMARY: done login`,
+      },
+      { id: "c2", author: "human", body: "@Dev Bot 当前分支是什么" },
+    ]);
+    const oneshot = vi.fn(async () => ({
+      status: "ok" as const,
+      summary: "当前在 feat/foo",
+      artifacts: [] as Array<{ kind: "file"; href: string; label?: string }>,
+    }));
+    const driver: AgentDriver = {
+      id: "spy",
+      displayName: "Spy",
+      oneshot,
+      chatStream: async function* () {},
+    };
+    await executeClaimedJob(
+      fakeClient({ listComments }) as never,
+      driver,
+      {
+        ...job,
+        trigger: "mention",
+        payload: JSON.stringify({
+          mentionBody: "@Dev Bot 当前分支是什么",
+          includeCommentHistory: true,
+          triggerCommentId: "c2",
+        }),
+      },
+    );
+    expect(listComments).toHaveBeenCalledWith("c1");
+    const prompt = oneshot.mock.calls[0]![0].prompt as string;
+    expect(prompt).toContain("Human mention (priority)");
+    expect(prompt).toContain("@Dev Bot 当前分支是什么");
+    expect(prompt).toContain("human: 先做登录");
+    expect(prompt).toMatch(/SUMMARY: done login/);
   });
 
   it("calls failJob when driver returns error status", async () => {

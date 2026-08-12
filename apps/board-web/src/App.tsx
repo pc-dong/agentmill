@@ -30,27 +30,43 @@ export function App() {
     if (!boardId) return;
     const list = await api.listCards(boardId);
     setCards(list);
-    if (selected) {
-      setSelected(list.find((c) => c.id === selected.id) ?? null);
-    }
-  }, [boardId, selected]);
+    setSelected((prev) =>
+      prev ? (list.find((c) => c.id === prev.id) ?? null) : null,
+    );
+  }, [boardId]);
+
+  /** Keep polling after a job is queued but not yet claimed (no lockedJobId yet). */
+  const [jobWatchUntil, setJobWatchUntil] = useState(0);
+  const armJobWatch = useCallback((ms = 90_000) => {
+    setJobWatchUntil(Date.now() + ms);
+  }, []);
 
   useEffect(() => {
     refresh().catch(console.error);
   }, [boardId]);
 
-  // While any card is locked by a claimed job, poll so "Bot 处理中" stays live.
+  // Clear the pre-claim watch window so polling can stop when idle.
+  useEffect(() => {
+    if (!jobWatchUntil) return;
+    const delay = Math.max(0, jobWatchUntil - Date.now());
+    const t = window.setTimeout(() => setJobWatchUntil(0), delay);
+    return () => window.clearTimeout(t);
+  }, [jobWatchUntil]);
+
+  // While any card is locked, or we recently queued a job, poll so busy UI stays live.
   const anyBotBusy = useMemo(
     () => cards.some((c) => Boolean(c.lockedJobId)),
     [cards],
   );
   useEffect(() => {
-    if (!boardId || !anyBotBusy) return;
+    if (!boardId) return;
+    const watchingQueue = jobWatchUntil > Date.now();
+    if (!anyBotBusy && !watchingQueue) return;
     const id = window.setInterval(() => {
       refresh().catch(console.error);
-    }, 4000);
+    }, watchingQueue && !anyBotBusy ? 2000 : 4000);
     return () => window.clearInterval(id);
-  }, [boardId, anyBotBusy, refresh]);
+  }, [boardId, anyBotBusy, jobWatchUntil, refresh]);
 
   async function confirmDelete() {
     if (!pendingDelete) return;
@@ -199,6 +215,10 @@ export function App() {
           cards={cards}
           onClose={() => setSelected(null)}
           onChanged={refresh}
+          onJobQueued={() => {
+            armJobWatch();
+            void refresh();
+          }}
           onRequestDelete={() => {
             setDeleteError(null);
             setPendingDelete(selected);

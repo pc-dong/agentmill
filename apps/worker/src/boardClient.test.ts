@@ -312,6 +312,19 @@ describe("BoardClient", () => {
     await client().postComment("c1", "bot", "hello");
   });
 
+  it("listComments GETs card comments", async () => {
+    const comments = [{ id: "cm1", author: "human", body: "hi", createdAt: "t" }];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(url).toBe(`${API}/cards/c1/comments`);
+        return new Response(JSON.stringify(comments), { status: 200 });
+      }),
+    );
+
+    await expect(client().listComments("c1")).resolves.toEqual(comments);
+  });
+
   it("markDesignSplitVerified POSTs split-verified", async () => {
     vi.stubGlobal(
       "fetch",

@@ -184,6 +184,12 @@ export class BoardClient {
     return this.postJson<Card>(`/cards/${cardId}/test-result`, { passed });
   }
 
+  async listComments(
+    cardId: string,
+  ): Promise<Array<{ id: string; author: string; body: string; createdAt: string }>> {
+    return this.getJson(`/cards/${cardId}/comments`);
+  }
+
   async postComment(
     cardId: string,
     author: string,

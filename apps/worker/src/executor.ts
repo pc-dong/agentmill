@@ -1,6 +1,11 @@
 import { buildPrompt, canonicalBaSettleArtifacts, parseBaSettle, ROLE_PROMPTS, type AgentDriver } from "@ai-workforce/agent";
 import type { BoardClient } from "./boardClient.js";
 import { resolveBaTemplatesDir, writeBaDocuments } from "./baWrite.js";
+import {
+  buildMentionPromptSection,
+  formatMentionCommentHistory,
+  parseMentionPayload,
+} from "./mentionContext.js";
 import { applyRoleOutcome } from "./outcomes.js";
 
 /** Parse `epic_id: E-...` from an epic card description. */
@@ -142,6 +147,21 @@ export async function executeClaimedJob(
     }
     if (trigger === "deep_dive" && job.payload?.trim()) {
       prompt = `${prompt}\n\n## Deep-dive context\n${job.payload.trim()}`;
+    }
+    if (trigger === "mention") {
+      const mention = parseMentionPayload(job.payload);
+      let historyBlock = "";
+      if (mention.includeCommentHistory) {
+        const comments = await client.listComments(job.cardId);
+        historyBlock = formatMentionCommentHistory(comments, {
+          triggerCommentId: mention.triggerCommentId,
+          mentionBody: mention.mentionBody,
+        });
+      }
+      prompt = `${prompt}\n\n${buildMentionPromptSection({
+        mentionBody: mention.mentionBody || "(empty mention)",
+        historyBlock,
+      })}`;
     }
 
     await client

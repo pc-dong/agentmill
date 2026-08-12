@@ -146,6 +146,8 @@ export function CardDrawer(props: {
   cards: Card[];
   onClose: () => void;
   onChanged: () => void;
+  /** Call after queuing a bot job that is not locked yet (e.g. @mention). */
+  onJobQueued?: () => void;
   onRequestDelete?: () => void;
 }) {
   const [comments, setComments] = useState<
@@ -163,6 +165,7 @@ export function CardDrawer(props: {
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [includeCommentHistory, setIncludeCommentHistory] = useState(false);
   const [linkedDesignIds, setLinkedDesignIds] = useState<string[]>([]);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [pipelineBusy, setPipelineBusy] = useState<
@@ -312,6 +315,7 @@ export function CardDrawer(props: {
     try {
       const { job } = await api.createDesignJob(props.card.id, { kind });
       const shortId = job.id.slice(0, 8);
+      props.onJobQueued?.();
       setPipelineTone("wait");
       setPipelineNote(
         kind === "split"
@@ -889,18 +893,40 @@ export function CardDrawer(props: {
             )}
           </div>
           <div className="comment-composer-actions">
+            <label
+              className="comment-history-opt"
+              title="开启后，@Bot 时会附带近期评论：人工/短评原文，长评压缩摘要"
+            >
+              <input
+                type="checkbox"
+                checked={includeCommentHistory}
+                onChange={(e) => setIncludeCommentHistory(e.target.checked)}
+              />
+              带历史评论
+            </label>
             <button
               type="button"
               className="comment-send"
               disabled={!body.trim()}
               onClick={async () => {
                 if (!body.trim()) return;
-                await api.addComment(props.card.id, "human", body);
+                const text = body.trim();
+                const mentioned =
+                  /@(Design|Split|Verify|Dev|Test|Review|BA)\s*Bot/i.test(
+                    text,
+                  );
+                await api.addComment(props.card.id, "human", text, {
+                  includeCommentHistory,
+                });
                 setBody("");
                 setMentionOpen(false);
                 const list = await api.listComments(props.card.id);
                 setComments(list);
-                props.onChanged();
+                if (mentioned) {
+                  props.onJobQueued?.();
+                } else {
+                  props.onChanged();
+                }
               }}
             >
               发送

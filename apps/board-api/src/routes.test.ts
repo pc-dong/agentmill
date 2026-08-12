@@ -153,6 +153,45 @@ describe("routes", () => {
     expect(res.status).toBe(201);
     const jobs = repo.listOpenJobs(board.id);
     expect(jobs.length).toBe(1);
+    const job = repo.getJob((jobs[0] as { id: string }).id)!;
+    const payload = JSON.parse(job.payload ?? "{}") as {
+      mentionBody: string;
+      includeCommentHistory: boolean;
+      triggerCommentId: string;
+    };
+    expect(payload.mentionBody).toBe("@Design Bot please draft outline");
+    expect(payload.includeCommentHistory).toBe(false);
+    expect(payload.triggerCommentId).toBeTruthy();
+  });
+
+  it("stores includeCommentHistory on mention job payload", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "requirements",
+      description: "",
+    });
+    const res = await app.request(`http://localhost/cards/${epic.id}/comments`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        author: "human",
+        body: "@Dev Bot 当前分支？",
+        includeCommentHistory: true,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const open = repo.listOpenJobs(board.id)[0] as { id: string };
+    const job = repo.getJob(open.id)!;
+    const payload = JSON.parse(job.payload ?? "{}") as {
+      includeCommentHistory: boolean;
+      mentionBody: string;
+    };
+    expect(payload.includeCommentHistory).toBe(true);
+    expect(payload.mentionBody).toContain("当前分支");
   });
 
   it("rejects create card with wrong column occupancy", async () => {
