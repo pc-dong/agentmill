@@ -51,6 +51,9 @@ export type Card = {
   requirementIds?: string[];
   /** Design card: last successful split verify; null when dirty / never verified. */
   splitVerifiedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  columnEnteredAt?: string | null;
 };
 
 export type SessionMessage = {

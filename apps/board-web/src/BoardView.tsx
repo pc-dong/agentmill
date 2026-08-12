@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Card } from "./api";
+import { cardsForColumn } from "./columnOrder";
 import { DocPreviewModal } from "./DocPreviewModal";
 import { requirementDerivedBadges, statusLabel } from "./derivedBadges";
 
@@ -52,8 +53,15 @@ export function BoardView(props: {
   const [preview, setPreview] = useState<{ card: Card; path: string } | null>(
     null,
   );
+  const [reqQuery, setReqQuery] = useState("");
+  const [doneQuery, setDoneQuery] = useState("");
   const dragCardRef = useRef<Card | null>(null);
   const didDragRef = useRef(false);
+
+  const columnQueries = useMemo(
+    () => ({ requirements: reqQuery, done: doneQuery }),
+    [reqQuery, doneQuery],
+  );
 
   const epicTitle = (epicId: string | null) => {
     if (!epicId) return null;
@@ -149,9 +157,29 @@ export function BoardView(props: {
               }}
             >
               <h3>{col.label}</h3>
-              {props.cards
-                .filter((c) => c.column === col.id)
-                .map((c) => {
+              {col.id === "requirements" && (
+                <input
+                  className="column-search"
+                  type="search"
+                  placeholder="搜索需求 / Epic…"
+                  value={reqQuery}
+                  onChange={(e) => setReqQuery(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="搜索需求列"
+                />
+              )}
+              {col.id === "done" && (
+                <input
+                  className="column-search"
+                  type="search"
+                  placeholder="搜索 Done…"
+                  value={doneQuery}
+                  onChange={(e) => setDoneQuery(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="搜索 Done 列"
+                />
+              )}
+              {cardsForColumn(props.cards, col.id, columnQueries).map((c) => {
                   const linked = epicTitle(c.epicId);
                   const canDrag = c.type !== "epic";
                   const derived =
