@@ -16,6 +16,17 @@ type Employee = {
   displayName: string;
 };
 
+function formatElapsed(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms) || ms < 0) return "0s";
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m === 0) return `${s}s`;
+  return `${m}m${String(s).padStart(2, "0")}s`;
+}
+
 function DesignRoundPanel(props: {
   boardId: string;
   epicId: string;
@@ -226,11 +237,19 @@ export function CardDrawer(props: {
     );
   }, [employees, mentionQuery]);
 
+  // Sync editable fields whenever the parent refreshes the card object.
   useEffect(() => {
     setTitle(props.card.title);
     setDescription(props.card.description);
     setEpicId(props.card.epicId ?? "");
     setStatus(props.card.status ?? "open");
+  }, [props.card]);
+
+  // Only reset pipeline banners / abort polls when switching to a different card.
+  // onChanged() during split/verify refreshes props.card identity and must not
+  // wipe "校验 Job 已提交…" / progress notes mid-flight.
+  useEffect(() => {
+    setError(null);
     setPipelineBusy(null);
     setPipelineNote(null);
     pipelinePollRef.current += 1;
@@ -247,7 +266,7 @@ export function CardDrawer(props: {
     } else {
       setLinkedDesignIds([]);
     }
-  }, [props.card]);
+  }, [props.card.id, props.card.boardId, props.card.type]);
 
   async function refreshComments() {
     const list = await api.listComments(props.card.id);
@@ -429,7 +448,32 @@ export function CardDrawer(props: {
         {props.card.type === "requirement" && statusLabel(props.card.status)
           ? ` · ${statusLabel(props.card.status)}`
           : ""}
+        {props.card.frozen ? " · FROZEN" : ""}
       </p>
+      {props.card.lockedJobId && (
+        <div className="design-pipeline-banner tone-info bot-job-banner" role="status">
+          <p className="bot-job-banner-title">
+            <span className="bot-busy-dot" aria-hidden />{" "}
+            {props.card.activeJob?.displayName ??
+              props.card.processingBy ??
+              "Bot"}{" "}
+            正在处理此卡
+            {props.card.activeJob?.trigger
+              ? ` · ${props.card.activeJob.trigger}`
+              : ""}
+            {props.card.activeJob?.claimedAt
+              ? ` · 已 ${formatElapsed(props.card.activeJob.claimedAt)}`
+              : props.card.lockedAt
+                ? `（自 ${props.card.lockedAt}）`
+                : ""}
+          </p>
+          {props.card.activeJob?.progress && (
+            <p className="bot-job-banner-progress">
+              {props.card.activeJob.progress}
+            </p>
+          )}
+        </div>
+      )}
       {derived.length > 0 && (
         <div className="derived-row">
           {derived.map((b) => (

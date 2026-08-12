@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseArtifactHints } from "./parse.js";
 import { parseOutcome } from "./parseOutcome.js";
 import { MockDriver } from "./mock.js";
@@ -17,16 +17,19 @@ async function collectEvents(
 describe("MockDriver", () => {
   it("returns canned summary and parsed artifacts", async () => {
     const d = new MockDriver();
+    const onProgress = vi.fn();
     const result = await d.oneshot({
       workspacePath: "/tmp/ws",
       prompt: "design please",
       role: "design",
       cardId: "c1",
       boardId: "b1",
+      onProgress,
     });
     expect(result.status).toBe("ok");
     expect(result.artifacts.some((a) => a.kind === "file")).toBe(true);
     expect(result.summary.length).toBeGreaterThan(0);
+    expect(onProgress.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("returns role-aware outcome lines for split/verify/test", async () => {

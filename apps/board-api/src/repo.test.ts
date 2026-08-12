@@ -108,8 +108,40 @@ describe("BoardRepo", () => {
     });
     const claimed = repo.claimJob(job.id, "worker-1");
     expect(claimed?.status).toBe("claimed");
+    expect(claimed?.progress).toBe("已认领，准备执行");
+    expect(claimed?.progressAt).toBeTruthy();
     expect(repo.getCard(epic.id)?.lockedJobId).toBe(job.id);
+    expect(repo.getCard(epic.id)?.activeJob?.progress).toBe("已认领，准备执行");
+    expect(repo.getCard(epic.id)?.activeJob?.displayName).toBe("Design Bot");
     expect(repo.claimJob(job.id, "worker-2")).toBeNull();
+  });
+
+  it("setJobProgress updates claimed job and is visible on card.activeJob", () => {
+    const { repo } = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const epic = repo.createCard({
+      boardId: board.id,
+      type: "epic",
+      title: "E",
+      column: "requirements",
+      description: "",
+    });
+    const emp = repo.listEmployees(board.id).find((e) => e.role === "design")!;
+    const job = repo.createJob({
+      boardId: board.id,
+      cardId: epic.id,
+      employeeId: emp.id,
+      trigger: "poll",
+    });
+    repo.claimJob(job.id, "worker-1");
+    const updated = repo.setJobProgress(job.id, "执行中：调用 Cursor…");
+    expect(updated?.progress).toBe("执行中：调用 Cursor…");
+    expect(repo.getCard(epic.id)?.activeJob?.progress).toBe(
+      "执行中：调用 Cursor…",
+    );
+    expect(repo.setJobProgress(job.id, "x")).not.toBeNull();
+    repo.completeJob(job.id, { summary: "done", artifacts: [] });
+    expect(repo.setJobProgress(job.id, "too late")).toBeNull();
   });
 
   it("claimJob returns null when card is frozen", () => {
@@ -256,7 +288,7 @@ describe("BoardRepo", () => {
     expect(idleJob?.trigger).toBe("poll");
   });
 
-  it("createPollJobs skips card+employee pairs with any prior job (done/failed)", () => {
+  it("createPollJobs skips finished jobs from the same column visit", () => {
     const { repo } = tempDb();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
     const designEmp = repo
@@ -304,8 +336,49 @@ describe("BoardRepo", () => {
     repo.claimJob(failedJob.id, "worker-1");
     repo.failJob(failedJob.id, "boom");
 
+    // Same column visit → still blocked
     expect(repo.createPollJobs(board.id)).toBe(0);
     expect(repo.listOpenJobs(board.id)).toHaveLength(0);
+  });
+
+  it("createPollJobs re-polls after rework re-enters watch column", () => {
+    const { repo } = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const testEmp = repo.listEmployees(board.id).find((e) => e.role === "test")!;
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "Rework task",
+      column: "test",
+      description: "",
+    });
+    const first = repo.createJob({
+      boardId: board.id,
+      cardId: task.id,
+      employeeId: testEmp.id,
+      trigger: "poll",
+    });
+    repo.claimJob(first.id, "worker-1");
+    repo.completeJob(first.id, { summary: "TEST fail", artifacts: [] });
+    expect(repo.createPollJobs(board.id)).toBe(0);
+
+    // Leave and re-enter test → new column visit → poll again
+    // Ensure column_entered_at is strictly after the prior job timestamp.
+    const before = Date.now();
+    while (Date.now() <= before) {
+      /* spin ~1ms */
+    }
+    repo.updateCard(task.id, { column: "dev" });
+    while (Date.now() <= before + 1) {
+      /* spin */
+    }
+    repo.updateCard(task.id, { column: "test" });
+    expect(repo.createPollJobs(board.id)).toBe(1);
+    const again = repo
+      .listOpenJobs(board.id)
+      .find((j) => j.cardId === task.id && j.employeeId === testEmp.id);
+    expect(again?.trigger).toBe("poll");
+    expect(again?.id).not.toBe(first.id);
   });
 
   it("completeJob writes artifacts and unlocks", () => {

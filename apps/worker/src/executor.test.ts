@@ -16,6 +16,7 @@ const templatesDir = path.join(
 function fakeClient(overrides: {
   completeJob?: ReturnType<typeof vi.fn>;
   failJob?: ReturnType<typeof vi.fn>;
+  setJobProgress?: ReturnType<typeof vi.fn>;
   listCards?: ReturnType<typeof vi.fn>;
   moveCard?: ReturnType<typeof vi.fn>;
   createCard?: ReturnType<typeof vi.fn>;
@@ -56,6 +57,7 @@ function fakeClient(overrides: {
     postTestResult: overrides.postTestResult ?? vi.fn(async () => {}),
     completeJob: overrides.completeJob ?? vi.fn(async () => {}),
     failJob: overrides.failJob ?? vi.fn(async () => {}),
+    setJobProgress: overrides.setJobProgress ?? vi.fn(async () => {}),
     baSettle: overrides.baSettle ?? vi.fn(async () => ({})),
   };
 }
@@ -77,6 +79,36 @@ describe("executeClaimedJob", () => {
     expect(completeJob).toHaveBeenCalledOnce();
     const body = completeJob.mock.calls[0]![1];
     expect(body.artifacts.length).toBeGreaterThan(0);
+  });
+
+  it("wires oneshot onProgress to setJobProgress and writes phases", async () => {
+    const setJobProgress = vi.fn(async () => {});
+    const oneshot = vi.fn(async (input: { onProgress?: (m: string) => void }) => {
+      input.onProgress?.("执行中：stream…");
+      return {
+        status: "ok" as const,
+        summary: "ok\nARTIFACT file docs/x.md X",
+        artifacts: [{ kind: "file" as const, href: "docs/x.md", label: "X" }],
+      };
+    });
+    const driver: AgentDriver = {
+      id: "spy",
+      displayName: "Spy",
+      oneshot,
+      chatStream: async function* () {},
+    };
+    await executeClaimedJob(
+      fakeClient({ setJobProgress }) as never,
+      driver,
+      job,
+    );
+    expect(setJobProgress.mock.calls.map((c) => c[1])).toEqual(
+      expect.arrayContaining([
+        "调用 Cursor，准备执行",
+        "执行中：stream…",
+        "写回结果…",
+      ]),
+    );
   });
 
   it("calls failJob when driver returns error status", async () => {

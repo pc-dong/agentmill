@@ -560,6 +560,15 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     return c.json(job);
   });
 
+  app.post("/jobs/:jobId/progress", async (c) => {
+    const body = z
+      .object({ text: z.string().min(1).max(500) })
+      .parse(await c.req.json());
+    const job = repo.setJobProgress(c.req.param("jobId"), body.text);
+    if (!job) return c.json({ error: "cannot update progress" }, 409);
+    return c.json(job);
+  });
+
   app.post("/jobs/:jobId/complete", async (c) => {
     const body = z
       .object({

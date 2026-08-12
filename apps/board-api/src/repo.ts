@@ -26,6 +26,24 @@ export type CardRecord = {
   frozen: boolean;
   lockedJobId: string | null;
   lockedAt: string | null;
+  /** Employee display name when a claimed job locks this card. */
+  processingBy: string | null;
+  /** Claimed locking job progress for board "Bot 处理中" UI. */
+  activeJob?: {
+    id: string;
+    status: string;
+    trigger: string;
+    role: string;
+    displayName: string;
+    claimedAt: string | null;
+    progress: string | null;
+    progressAt: string | null;
+  };
+  /**
+   * ISO time when the card last entered its current column.
+   * Used so poll jobs re-fire after rework (leave + re-enter watch column).
+   */
+  columnEnteredAt: string;
   artifacts: ArtifactRef[];
   /** Populated for design cards when listing with links. */
   requirementIds?: string[];
@@ -52,10 +70,21 @@ export type JobRecord = {
   payload: string | null;
   workerId: string | null;
   error: string | null;
+  progress: string | null;
+  progressAt: string | null;
   createdAt: string;
   claimedAt: string | null;
   finishedAt: string | null;
 };
+
+const JOB_PROGRESS_MAX = 500;
+const CLAIM_PROGRESS = "已认领，准备执行";
+
+function clipJobProgress(text: string): string {
+  const t = text.trim();
+  if (t.length <= JOB_PROGRESS_MAX) return t;
+  return `${t.slice(0, JOB_PROGRESS_MAX - 1)}…`;
+}
 
 const DEFAULT_EMPLOYEES: Array<{
   role: string;
@@ -142,8 +171,9 @@ export class BoardRepo {
       .prepare(
         `INSERT INTO cards (
            id, board_id, type, title, description, column_id, epic_id, design_id,
-           rework_count, frozen, artifacts_json, status, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
+           rework_count, frozen, artifacts_json, status,
+           column_entered_at, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -159,6 +189,7 @@ export class BoardRepo {
         status,
         now,
         now,
+        now,
       );
     return this.getCard(id)!;
   }
@@ -171,6 +202,7 @@ export class BoardRepo {
                 rework_count as reworkCount, frozen, artifacts_json as artifactsJson,
                 locked_job_id as lockedJobId, locked_at as lockedAt,
                 split_verified_at as splitVerifiedAt,
+                column_entered_at as columnEnteredAt,
                 created_at as createdAt, updated_at as updatedAt
          FROM cards WHERE id = ?`,
       )
@@ -191,6 +223,7 @@ export class BoardRepo {
           lockedJobId: string | null;
           lockedAt: string | null;
           splitVerifiedAt: string | null;
+          columnEnteredAt: string | null;
           createdAt: string;
           updatedAt: string;
         }
@@ -213,10 +246,58 @@ export class BoardRepo {
       frozen: !!row.frozen,
       lockedJobId: row.lockedJobId || null,
       lockedAt: row.lockedAt || null,
+      processingBy: this.resolveProcessingBy(row.lockedJobId || null),
+      activeJob: this.resolveActiveJob(row.lockedJobId || null),
+      columnEnteredAt: row.columnEnteredAt || row.createdAt,
       splitVerifiedAt: row.splitVerifiedAt ?? null,
       artifacts: JSON.parse(row.artifactsJson) as ArtifactRef[],
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+    };
+  }
+
+  /** Who holds the claimed lock on this card (for board "Bot 处理中" badges). */
+  private resolveProcessingBy(lockedJobId: string | null): string | null {
+    if (!lockedJobId) return null;
+    return this.resolveActiveJob(lockedJobId)?.displayName ?? "Bot";
+  }
+
+  private resolveActiveJob(
+    lockedJobId: string | null,
+  ): CardRecord["activeJob"] | undefined {
+    if (!lockedJobId) return undefined;
+    const row = this.db
+      .prepare(
+        `SELECT j.id as id, j.status as status, j.trigger as trigger,
+                j.claimed_at as claimedAt, j.progress as progress,
+                j.progress_at as progressAt,
+                e.role as role, e.display_name as displayName
+         FROM jobs j
+         JOIN employees e ON e.id = j.employee_id
+         WHERE j.id = ? AND j.status = 'claimed'`,
+      )
+      .get(lockedJobId) as
+      | {
+          id: string;
+          status: string;
+          trigger: string;
+          claimedAt: string | null;
+          progress: string | null;
+          progressAt: string | null;
+          role: string;
+          displayName: string;
+        }
+      | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      status: row.status,
+      trigger: row.trigger,
+      role: row.role,
+      displayName: row.displayName || "Bot",
+      claimedAt: row.claimedAt ?? null,
+      progress: row.progress ?? null,
+      progressAt: row.progressAt ?? null,
     };
   }
 
@@ -249,15 +330,20 @@ export class BoardRepo {
   ): CardRecord {
     const current = this.getCard(id);
     if (!current) throw new Error(`Card not found: ${id}`);
+    const now = new Date().toISOString();
+    const columnChanged =
+      patch.column !== undefined && patch.column !== current.column;
     const next = {
       ...current,
       ...patch,
-      updatedAt: new Date().toISOString(),
+      columnEnteredAt: columnChanged ? now : current.columnEnteredAt,
+      updatedAt: now,
     };
     this.db
       .prepare(
         `UPDATE cards SET title=?, description=?, column_id=?, epic_id=?, design_id=?,
-         rework_count=?, frozen=?, artifacts_json=?, status=?, updated_at=? WHERE id=?`,
+         rework_count=?, frozen=?, artifacts_json=?, status=?,
+         column_entered_at=?, updated_at=? WHERE id=?`,
       )
       .run(
         next.title,
@@ -269,6 +355,7 @@ export class BoardRepo {
         next.frozen ? 1 : 0,
         JSON.stringify(next.artifacts),
         next.type === "requirement" ? (next.status ?? "open") : null,
+        next.columnEnteredAt,
         next.updatedAt,
         id,
       );
@@ -499,6 +586,7 @@ export class BoardRepo {
       .prepare(
         `SELECT id, board_id as boardId, card_id as cardId, employee_id as employeeId,
                 status, trigger, payload, worker_id as workerId, error,
+                progress, progress_at as progressAt,
                 created_at as createdAt, claimed_at as claimedAt, finished_at as finishedAt
          FROM jobs WHERE id = ?`,
       )
@@ -513,6 +601,8 @@ export class BoardRepo {
           payload: string | null;
           workerId: string | null;
           error: string | null;
+          progress: string | null;
+          progressAt: string | null;
           createdAt: string;
           claimedAt: string | null;
           finishedAt: string | null;
@@ -529,10 +619,26 @@ export class BoardRepo {
       payload: row.payload ?? null,
       workerId: row.workerId ?? null,
       error: row.error ?? null,
+      progress: row.progress ?? null,
+      progressAt: row.progressAt ?? null,
       createdAt: row.createdAt,
       claimedAt: row.claimedAt ?? null,
       finishedAt: row.finishedAt ?? null,
     };
+  }
+
+  setJobProgress(jobId: string, text: string): JobRecord | null {
+    const job = this.getJob(jobId);
+    if (!job || job.status !== "claimed") return null;
+    const now = new Date().toISOString();
+    const progress = clipJobProgress(text);
+    const result = this.db
+      .prepare(
+        `UPDATE jobs SET progress=?, progress_at=? WHERE id=? AND status='claimed'`,
+      )
+      .run(progress, now, jobId);
+    if (result.changes !== 1) return null;
+    return this.getJob(jobId);
   }
 
   findEpicCardByEpicId(boardId: string, epicKey: string): CardRecord | null {
@@ -581,9 +687,10 @@ export class BoardRepo {
       const now = new Date().toISOString();
       const updateResult = this.db
         .prepare(
-          `UPDATE jobs SET status='claimed', claimed_at=?, worker_id=? WHERE id=? AND status='open'`,
+          `UPDATE jobs SET status='claimed', claimed_at=?, worker_id=?, progress=?, progress_at=?
+           WHERE id=? AND status='open'`,
         )
-        .run(now, workerId, jobId);
+        .run(now, workerId, CLAIM_PROGRESS, now, jobId);
       if (updateResult.changes !== 1) return null;
       this.db
         .prepare(
@@ -694,13 +801,21 @@ export class BoardRepo {
             continue;
           if (designFlowRoles.has(emp.role) && card.type !== "design") continue;
           if (emp.role === "ba" && card.type !== "requirement") continue;
-          const existing = this.db
+          // Block only: in-flight jobs, or a job already created for this
+          // column visit (created_at >= columnEnteredAt). Finished jobs from
+          // an earlier visit do not block — enables rework re-poll.
+          const blocking = this.db
             .prepare(
               `SELECT id FROM jobs
-               WHERE card_id = ? AND employee_id = ?`,
+               WHERE card_id = ? AND employee_id = ?
+                 AND (
+                   status IN ('open', 'claimed')
+                   OR created_at >= ?
+                 )
+               LIMIT 1`,
             )
-            .get(card.id, emp.id);
-          if (existing) continue;
+            .get(card.id, emp.id, card.columnEnteredAt);
+          if (blocking) continue;
           this.createJob({
             boardId,
             cardId: card.id,

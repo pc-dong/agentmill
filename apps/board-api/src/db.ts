@@ -98,10 +98,13 @@ export function migrate(db: Database.Database): void {
   ensureColumn(db, "cards", "status", "TEXT");
   ensureColumn(db, "cards", "design_id", "TEXT");
   ensureColumn(db, "cards", "split_verified_at", "TEXT");
+  ensureColumn(db, "cards", "column_entered_at", "TEXT");
   ensureColumn(db, "jobs", "error", "TEXT");
   ensureColumn(db, "jobs", "finished_at", "TEXT");
   ensureColumn(db, "jobs", "worker_id", "TEXT");
   ensureColumn(db, "jobs", "payload", "TEXT");
+  ensureColumn(db, "jobs", "progress", "TEXT");
+  ensureColumn(db, "jobs", "progress_at", "TEXT");
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS design_requirements (
@@ -116,6 +119,13 @@ export function migrate(db: Database.Database): void {
   db.prepare(
     `UPDATE cards SET status = 'open'
      WHERE type = 'requirement' AND (status IS NULL OR status = '')`,
+  ).run();
+
+  // Backfill column visit timestamp so historical poll jobs still block until
+  // the card re-enters a watch column (rework).
+  db.prepare(
+    `UPDATE cards SET column_entered_at = COALESCE(column_entered_at, created_at)
+     WHERE column_entered_at IS NULL OR column_entered_at = ''`,
   ).run();
 
   migrateStrandedEpicsToDesignCards(db);

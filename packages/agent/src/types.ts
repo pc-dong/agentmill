@@ -16,6 +16,8 @@ export type RunInput = {
   role: string;
   cardId: string;
   boardId: string;
+  /** Optional progress callback for oneshot streaming UIs. */
+  onProgress?: (message: string) => void;
 };
 
 export type ChatInput = {

@@ -76,6 +76,17 @@ describe("BoardClient", () => {
     await client().failJob("j1", "boom");
   });
 
+  it("setJobProgress POSTs text", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe(`${API}/jobs/j1/progress`);
+      expect(JSON.parse(String(init?.body))).toEqual({ text: "执行中…" });
+      return new Response("{}", { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await client().setJobProgress("j1", "执行中…");
+  });
+
   it("getBoard returns workspacePath", async () => {
     vi.stubGlobal(
       "fetch",

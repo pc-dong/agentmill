@@ -39,6 +39,19 @@ export function App() {
     refresh().catch(console.error);
   }, [boardId]);
 
+  // While any card is locked by a claimed job, poll so "Bot 处理中" stays live.
+  const anyBotBusy = useMemo(
+    () => cards.some((c) => Boolean(c.lockedJobId)),
+    [cards],
+  );
+  useEffect(() => {
+    if (!boardId || !anyBotBusy) return;
+    const id = window.setInterval(() => {
+      refresh().catch(console.error);
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [boardId, anyBotBusy, refresh]);
+
   async function confirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);

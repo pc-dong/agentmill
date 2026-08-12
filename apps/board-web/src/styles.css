@@ -56,10 +56,79 @@ body { margin: 0; }
   color: #b91c1c;
 }
 .card.frozen { outline: 2px solid #b91c1c; }
+.card.bot-busy { outline: 2px solid #2563eb; }
 .card.epic { border-left: 3px solid #0f766e; }
 .card.design { border-left: 3px solid #c2410c; }
 .card.card-fixed { cursor: pointer; opacity: 0.98; }
 .epic-link { color: #0f766e; font-size: 11px; margin-top: 4px; }
+.bot-busy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  margin-right: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.bot-busy-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2563eb;
+  animation: bot-busy-pulse 1s ease-in-out infinite;
+}
+@keyframes bot-busy-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+}
+.bot-job-progress {
+  margin-top: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.bot-job-progress-meta {
+  font-weight: 600;
+  color: #1d4ed8;
+}
+.bot-job-progress-text {
+  margin-top: 2px;
+  color: #334155;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+.bot-job-banner .bot-job-banner-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.bot-job-banner .bot-job-banner-progress {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #1e3a8a;
+}
 .status-badge {
   display: inline-block;
   margin-top: 6px;

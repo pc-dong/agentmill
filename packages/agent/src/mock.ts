@@ -38,6 +38,11 @@ export class MockDriver implements AgentDriver {
   readonly displayName = "Mock Driver";
 
   async oneshot(input: RunInput): Promise<RunResult> {
+    input.onProgress?.("执行中：Mock 开始…");
+    await new Promise((r) => setTimeout(r, 5));
+    input.onProgress?.("执行中：Mock 生成结果…");
+    await new Promise((r) => setTimeout(r, 5));
+
     let summary: string;
 
     if (input.role === "ba" || input.role === "baDeepDive") {
@@ -60,7 +65,7 @@ export class MockDriver implements AgentDriver {
       summary = [
         `Mock ${input.role} completed for card ${input.cardId}.`,
         "SUMMARY: mock dev implementation complete",
-        "ARTIFACT pr https://example.com/pr/1 PR",
+        "ARTIFACT file docs/aiw/dev-notes.md Local notes",
       ].join("\n");
     } else if (input.role === "test") {
       summary = [
@@ -75,6 +80,7 @@ export class MockDriver implements AgentDriver {
       ].join("\n");
     }
 
+    input.onProgress?.(`执行中：${summary.slice(0, 80)}`);
     return {
       status: "ok",
       summary,

@@ -100,6 +100,10 @@ export class BoardClient {
     await this.postJson(`/jobs/${jobId}/fail`, { message });
   }
 
+  async setJobProgress(jobId: string, text: string): Promise<void> {
+    await this.postJson(`/jobs/${jobId}/progress`, { text });
+  }
+
   async getBoard(): Promise<{ workspacePath: string }> {
     const board = await this.getJson<{ workspacePath: string }>(
       `/boards/${this.opts.boardId}`,

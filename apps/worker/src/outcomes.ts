@@ -173,6 +173,11 @@ export async function applyRoleOutcome(
     }
 
     case "dev": {
+      // Mentions / Q&A on cards already past (or not yet in) the dev column
+      // must never drag the card into test.
+      if (ctx.cardColumn !== "dev") {
+        return;
+      }
       const line =
         outcome.summaryLine ??
         summary.match(/^SUMMARY:\s*(.+)$/im)?.[1]?.trim();

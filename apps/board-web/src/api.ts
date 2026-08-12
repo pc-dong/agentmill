@@ -29,6 +29,22 @@ export type Card = {
   reworkCount: number;
   frozen: boolean;
   artifacts: ArtifactHint[];
+  /** Set when a claimed job locks the card (bot processing). */
+  lockedJobId?: string | null;
+  lockedAt?: string | null;
+  /** Employee display name for the locking claimed job, if any. */
+  processingBy?: string | null;
+  /** Claimed locking job details for progress UI. */
+  activeJob?: {
+    id: string;
+    status: string;
+    trigger: string;
+    role: string;
+    displayName: string;
+    claimedAt: string | null;
+    progress: string | null;
+    progressAt: string | null;
+  } | null;
   /** Requirement coarse status; null/undefined for other types. */
   status?: RequirementStatus | null;
   /** Populated for design cards. */

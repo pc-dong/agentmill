@@ -227,6 +227,30 @@ describe("applyRoleOutcome", () => {
       );
       expect(client.moveCard).not.toHaveBeenCalled();
     });
+
+    it("does not move when card is already past dev (Q&A / mention follow-up)", async () => {
+      const client = fakeClient();
+      await applyRoleOutcome(
+        "dev",
+        "SUMMARY: answered question about oauth\nHere is the explanation…",
+        { ...taskCtx, cardColumn: "accept" },
+        client,
+      );
+      expect(client.moveCard).not.toHaveBeenCalled();
+      expect(client.postComment).not.toHaveBeenCalled();
+    });
+
+    it("allows Q&A without SUMMARY when card is not in dev", async () => {
+      const client = fakeClient();
+      await applyRoleOutcome(
+        "dev",
+        "The handler uses JWT from the Authorization header.",
+        { ...taskCtx, cardColumn: "done" },
+        client,
+      );
+      expect(client.moveCard).not.toHaveBeenCalled();
+      expect(client.postComment).not.toHaveBeenCalled();
+    });
   });
 
   describe("test", () => {

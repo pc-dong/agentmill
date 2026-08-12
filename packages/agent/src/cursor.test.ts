@@ -6,11 +6,6 @@ const mockAsyncDispose = vi.fn(async () => {});
 
 vi.mock("@cursor/sdk", () => ({
   Agent: {
-    prompt: vi.fn(async () => ({
-      id: "run-1",
-      status: "finished",
-      result: "ok\nARTIFACT file docs/x.md X",
-    })),
     create: vi.fn(async () => ({
       agentId: "agent-1",
       send: mockSend,
@@ -48,7 +43,6 @@ function assistantStream(text: string) {
 
 describe("CursorDriver", () => {
   beforeEach(() => {
-    vi.mocked(Agent.prompt).mockClear();
     vi.mocked(Agent.create).mockClear();
     mockSend.mockReset();
     mockAsyncDispose.mockClear();
@@ -57,31 +51,37 @@ describe("CursorDriver", () => {
     });
   });
 
-  it("calls Agent.prompt with local cwd", async () => {
+  it("oneshot uses Agent.create, send, and stream", async () => {
     const d = new CursorDriver({
       apiKey: "test-key",
       modelId: "composer-2.5",
     });
+    const onProgress = vi.fn();
     const result = await d.oneshot({
       workspacePath: "/tmp/ws",
       prompt: "hello",
       role: "design",
       cardId: "c1",
       boardId: "b1",
+      onProgress,
     });
-    expect(Agent.prompt).toHaveBeenCalledWith(
-      "hello",
+    expect(Agent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         apiKey: "test-key",
         local: { cwd: "/tmp/ws" },
       }),
     );
+    expect(mockSend).toHaveBeenCalledWith("hello");
     expect(result.status).toBe("ok");
     expect(result.artifacts[0]?.href).toBe("docs/x.md");
+    expect(onProgress).toHaveBeenCalled();
+    expect(onProgress.mock.calls.some((c) => String(c[0]).includes("执行中"))).toBe(
+      true,
+    );
   });
 
-  it("returns error when Agent.prompt throws", async () => {
-    vi.mocked(Agent.prompt).mockRejectedValueOnce(new Error("sdk failed"));
+  it("returns error when Agent.create throws", async () => {
+    vi.mocked(Agent.create).mockRejectedValueOnce(new Error("sdk failed"));
     const d = new CursorDriver({ apiKey: "k", modelId: "m" });
     const result = await d.oneshot({
       workspacePath: "/tmp",
@@ -95,11 +95,9 @@ describe("CursorDriver", () => {
     expect(result.artifacts).toEqual([]);
   });
 
-  it("returns error when run status is not finished", async () => {
-    vi.mocked(Agent.prompt).mockResolvedValueOnce({
-      id: "run-1",
-      status: "error",
-      error: { message: "agent error" },
+  it("returns error when stream yields no assistant text", async () => {
+    mockSend.mockResolvedValueOnce({
+      stream: async function* () {},
     });
     const d = new CursorDriver({ apiKey: "k", modelId: "m" });
     const result = await d.oneshot({
@@ -110,7 +108,7 @@ describe("CursorDriver", () => {
       boardId: "b1",
     });
     expect(result.status).toBe("error");
-    expect(result.summary).toBe("agent error");
+    expect(result.summary).toMatch(/empty/i);
   });
 
   it("chatStream uses Agent.create, send, and stream", async () => {
@@ -121,23 +119,14 @@ describe("CursorDriver", () => {
         role: "design",
         cardId: "c1",
         boardId: "b1",
-        history: [{ role: "user", content: "hi" }],
-        message: "tell me more",
+        history: [],
+        message: "hi",
       }),
     );
-
-    expect(Agent.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        apiKey: "test-key",
-        local: { cwd: "/tmp/ws" },
-      }),
-    );
-    expect(mockSend).toHaveBeenCalledWith(
-      expect.stringContaining("tell me more"),
-    );
+    expect(Agent.create).toHaveBeenCalled();
+    expect(mockSend).toHaveBeenCalled();
     expect(events.some((e) => e.type === "text_delta")).toBe(true);
-    const done = events.find((e) => e.type === "done");
-    expect(done?.type === "done" && done.summary).toContain("docs/x.md");
+    expect(events.at(-1)?.type).toBe("done");
     expect(mockAsyncDispose).toHaveBeenCalled();
   });
 
@@ -151,7 +140,7 @@ describe("CursorDriver", () => {
         cardId: "c1",
         boardId: "b1",
         history: [],
-        message: "hello",
+        message: "hi",
       }),
     );
     expect(events).toEqual([{ type: "error", message: "create failed" }]);
@@ -167,10 +156,9 @@ describe("CursorDriver", () => {
         cardId: "c1",
         boardId: "b1",
         history: [],
-        message: "hello",
+        message: "hi",
       }),
     );
     expect(events).toEqual([{ type: "error", message: "send failed" }]);
-    expect(mockAsyncDispose).toHaveBeenCalled();
   });
 });

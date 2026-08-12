@@ -58,6 +58,7 @@ export async function executeClaimedJob(
     const trigger = job.trigger ?? "poll";
 
     if (trigger === "settle") {
+      await client.setJobProgress(job.id, "结算中：写入文档…").catch(() => undefined);
       const parsed = parseBaSettle(job.payload ?? "");
       if ("error" in parsed) {
         await client.failJob(job.id, parsed.error);
@@ -87,6 +88,7 @@ export async function executeClaimedJob(
         templatesDir,
       });
       const artifacts = mapArtifacts(canonicalBaSettleArtifacts(protocol));
+      await client.setJobProgress(job.id, "写回结果…").catch(() => undefined);
       await client.baSettle(card.id, {
         mode: protocol.mode,
         epicKey: protocol.epicId,
@@ -142,18 +144,26 @@ export async function executeClaimedJob(
       prompt = `${prompt}\n\n## Deep-dive context\n${job.payload.trim()}`;
     }
 
+    await client
+      .setJobProgress(job.id, "调用 Cursor，准备执行")
+      .catch(() => undefined);
     const result = await driver.oneshot({
       workspacePath: board.workspacePath,
       prompt,
       role: roleKey,
       cardId: job.cardId,
       boardId: job.boardId,
+      onProgress: (msg) => {
+        void client.setJobProgress(job.id, msg).catch(() => undefined);
+      },
     });
     if (result.status === "error") {
       await client.failJob(job.id, result.summary);
       return;
     }
     const artifacts = mapArtifacts(result.artifacts);
+
+    await client.setJobProgress(job.id, "写回结果…").catch(() => undefined);
 
     if (isBaPath) {
       await client.completeJob(job.id, {

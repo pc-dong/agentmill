@@ -10,20 +10,34 @@ import type {
   RunResult,
 } from "./types.js";
 
-function summaryFromPromptResult(
-  result: Awaited<ReturnType<typeof Agent.prompt>>,
-): string {
-  if (typeof result.result === "string") {
-    return result.result;
-  }
-  return JSON.stringify(result.result ?? result);
-}
-
 function assistantTextFromMessage(message: SDKAssistantMessage): string {
   return message.message.content
     .filter((block): block is { type: "text"; text: string } => block.type === "text")
     .map((block) => block.text)
     .join("");
+}
+
+const PROGRESS_INTERVAL_MS = 2000;
+const PROGRESS_CHARS = 200;
+const PROGRESS_TAIL = 160;
+
+function reportProgress(
+  onProgress: ((message: string) => void) | undefined,
+  message: string,
+): void {
+  if (!onProgress) return;
+  try {
+    onProgress(message);
+  } catch {
+    // Progress is best-effort; never fail the run.
+  }
+}
+
+function progressFromTail(fullText: string): string {
+  const trimmed = fullText.trim();
+  if (!trimmed) return "执行中…";
+  if (trimmed.length <= PROGRESS_TAIL) return `执行中：${trimmed}`;
+  return `执行中：…${trimmed.slice(-PROGRESS_TAIL)}`;
 }
 
 export function composeChatPrompt(input: ChatInput): string {
@@ -54,21 +68,54 @@ export class CursorDriver implements AgentDriver {
   ) {}
 
   async oneshot(input: RunInput): Promise<RunResult> {
+    let agent: Awaited<ReturnType<typeof Agent.create>> | undefined;
+
     try {
-      const result = await Agent.prompt(input.prompt, {
+      reportProgress(input.onProgress, "执行中：调用 Cursor Agent…");
+      agent = await Agent.create({
         apiKey: this.opts.apiKey,
         model: { id: this.opts.modelId },
         local: { cwd: input.workspacePath },
       });
 
-      if (result.status !== "finished") {
-        const message =
-          result.error?.message ??
-          (typeof result.result === "string" ? result.result : `Run ${result.status}`);
-        return { status: "error", summary: message, artifacts: [] };
-      }
+      reportProgress(input.onProgress, "执行中：已创建 Agent，发送任务…");
+      const run = await agent.send(input.prompt);
+      let fullText = "";
+      let lastReportAt = 0;
+      let charsSinceReport = 0;
 
-      const summary = summaryFromPromptResult(result);
+      const maybeReport = (force = false) => {
+        const now = Date.now();
+        if (
+          !force &&
+          now - lastReportAt < PROGRESS_INTERVAL_MS &&
+          charsSinceReport < PROGRESS_CHARS
+        ) {
+          return;
+        }
+        lastReportAt = now;
+        charsSinceReport = 0;
+        reportProgress(input.onProgress, progressFromTail(fullText));
+      };
+
+      for await (const event of run.stream()) {
+        if (event.type !== "assistant") continue;
+        const text = assistantTextFromMessage(event);
+        if (!text) continue;
+        fullText += text;
+        charsSinceReport += text.length;
+        maybeReport();
+      }
+      maybeReport(true);
+
+      const summary = fullText.trim();
+      if (!summary) {
+        return {
+          status: "error",
+          summary: "Cursor Agent returned empty output",
+          artifacts: [],
+        };
+      }
       return {
         status: "ok",
         summary,
@@ -77,6 +124,10 @@ export class CursorDriver implements AgentDriver {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       return { status: "error", summary: message, artifacts: [] };
+    } finally {
+      if (agent) {
+        await agent[Symbol.asyncDispose]();
+      }
     }
   }
 

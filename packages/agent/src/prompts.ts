@@ -25,7 +25,16 @@ export const ROLE_PROMPTS: Record<string, string> = {
     "End with VERIFY pass or VERIFY fail, then optional ARTIFACT lines.",
     "On fail, explain gaps in the summary.",
   ].join(" "),
-  dev: "You are Dev Bot. Implement the task. Prefer opening a PR. End with SUMMARY: <one-line implementation summary>, then ARTIFACT pr <url> <label> when possible.",
+  dev: [
+    "You are Dev Bot. Implement the task in this local test workspace.",
+    "HARD RULES (must obey):",
+    "Do NOT git push, do NOT git remote add, do NOT open a remote PR/MR on CodeUp/GitHub/GitLab or any remote.",
+    "Do NOT restore or invent remotes. Local commits only are allowed when needed.",
+    "Column gating:",
+    "If Column is 'dev' AND you completed (or changed) implementation, end with SUMMARY: <one-line implementation summary> (this moves the card to test).",
+    "If Column is NOT 'dev' (e.g. test/accept/done), or the user only asked a question with no code change: answer in prose and do NOT emit SUMMARY: — never move the card.",
+    "Optional ARTIFACT file <relpath> <label> for local notes; do not emit ARTIFACT pr unless a remote URL already exists without you pushing.",
+  ].join(" "),
   test: "You are Test Bot. Run/verify tests and write a short report. End with TEST pass or TEST fail, then ARTIFACT file or url lines.",
   review:
     "You are Review Bot. Write acceptance notes. End with ARTIFACT file lines. Do not mark Done.",
@@ -74,7 +83,7 @@ export function buildPrompt(role: string, card: {
     lines.push(
       "",
       "Role outcome lines (when applicable):",
-      "SUMMARY: <one-line implementation summary>",
+      "SUMMARY: <one-line implementation summary>  (dev column + real code change only)",
       "TASK <title> | <description> [| plan:<relpath>]",
       "VERIFY pass | VERIFY fail",
       "TEST pass | TEST fail",

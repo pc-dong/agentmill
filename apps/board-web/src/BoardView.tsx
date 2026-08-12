@@ -25,6 +25,17 @@ function needsHumanGate(from: string, to: string): boolean {
   return HUMAN_GATES.has(`${from}→${to}`);
 }
 
+function formatElapsed(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms) || ms < 0) return "0s";
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m === 0) return `${s}s`;
+  return `${m}m${String(s).padStart(2, "0")}s`;
+}
+
 export function BoardView(props: {
   cards: Card[];
   onOpen: (card: Card) => void;
@@ -159,8 +170,10 @@ export function BoardView(props: {
                       className={`card${c.frozen ? " frozen" : ""}${
                         c.type === "epic" ? " epic" : ""
                       }${c.type === "design" ? " design" : ""}${
-                        draggingId === c.id ? " card-dragging" : ""
-                      }${!canDrag ? " card-fixed" : ""}`}
+                        c.lockedJobId ? " bot-busy" : ""
+                      }${draggingId === c.id ? " card-dragging" : ""}${
+                        !canDrag ? " card-fixed" : ""
+                      }`}
                       draggable={canDrag}
                       onDragStart={(e) => {
                         if (!canDrag) {
@@ -218,6 +231,38 @@ export function BoardView(props: {
                         </button>
                       </div>
                       <strong>{c.title}</strong>
+                      {c.lockedJobId && (
+                        <span
+                          className="bot-busy-badge"
+                          title={
+                            c.lockedAt
+                              ? `自 ${c.lockedAt} 起处理中`
+                              : "Bot 正在处理此卡"
+                          }
+                        >
+                          <span className="bot-busy-dot" aria-hidden />
+                          {c.processingBy
+                            ? `${c.processingBy} 处理中`
+                            : "Bot 处理中"}
+                        </span>
+                      )}
+                      {c.activeJob && (
+                        <div className="bot-job-progress" title={c.activeJob.progress ?? undefined}>
+                          <div className="bot-job-progress-meta">
+                            {c.activeJob.displayName}
+                            {" · "}
+                            {c.activeJob.trigger}
+                            {c.activeJob.claimedAt
+                              ? ` · 已 ${formatElapsed(c.activeJob.claimedAt)}`
+                              : ""}
+                          </div>
+                          {c.activeJob.progress && (
+                            <div className="bot-job-progress-text">
+                              {c.activeJob.progress}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {reqStatus && (
                         <span
                           className={`status-badge status-${c.status ?? "open"}`}

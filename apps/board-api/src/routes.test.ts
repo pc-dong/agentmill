@@ -288,6 +288,28 @@ describe("routes", () => {
     expect(claimed.status).toBe("claimed");
     expect(repo.getCard(epic.id)?.lockedJobId).toBe(jobId);
 
+    const progressRes = await app.request(
+      `http://localhost/jobs/${jobId}/progress`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: "执行中：流式摘要…" }),
+      },
+    );
+    expect(progressRes.status).toBe(200);
+    const cardsRes = await app.request(
+      `http://localhost/boards/${board.id}/cards`,
+    );
+    expect(cardsRes.status).toBe(200);
+    const cards = (await cardsRes.json()) as Array<{
+      id: string;
+      activeJob?: { progress: string | null; trigger: string; displayName: string };
+    }>;
+    const locked = cards.find((c) => c.id === epic.id)!;
+    expect(locked.activeJob?.progress).toBe("执行中：流式摘要…");
+    expect(locked.activeJob?.trigger).toBe("mention");
+    expect(locked.activeJob?.displayName).toBe("Design Bot");
+
     const completeRes = await app.request(
       `http://localhost/jobs/${jobId}/complete`,
       {
