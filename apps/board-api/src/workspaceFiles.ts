@@ -105,6 +105,22 @@ export type ResolvedWorkspacePath =
   | { ok: true; abs: string; rel: string; ext: string }
   | { ok: false; error: string; status: 400 };
 
+const SKIP_DIR_NAMES = new Set([
+  ".git",
+  "node_modules",
+  "target",
+  "dist",
+  "build",
+  "out",
+  ".idea",
+  ".gradle",
+  "coverage",
+  "__pycache__",
+  ".turbo",
+  ".next",
+  "vendor",
+]);
+
 /**
  * Resolve a relative path under workspacePath. Rejects absolute paths,
  * empty paths, and anything that escapes the workspace root.
@@ -113,7 +129,8 @@ export function resolveUnderWorkspace(
   workspacePath: string,
   relativePath: string,
 ): ResolvedWorkspacePath {
-  const trimmed = relativePath.trim().replace(/\\/g, "/");
+  let trimmed = relativePath.trim().replace(/\\/g, "/");
+  while (trimmed.startsWith("./")) trimmed = trimmed.slice(2);
   if (!trimmed || trimmed === ".") {
     return { ok: false, error: "path is required", status: 400 };
   }
@@ -134,6 +151,117 @@ export function resolveUnderWorkspace(
   const ext = path.extname(abs).toLowerCase();
   const rel = relToRoot.split(path.sep).join("/");
   return { ok: true, abs, rel, ext };
+}
+
+function isExistingFile(abs: string): boolean {
+  try {
+    return fs.existsSync(abs) && fs.statSync(abs).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * When agents emit paths relative to a nested repo (e.g. productms-commerce/...)
+ * rather than the board workspace root (union_platform/up-masterdata-service/...),
+ * try prefixed candidates and a bounded suffix search under the workspace.
+ */
+export function resolveExistingUnderWorkspace(
+  workspacePath: string,
+  relativePath: string,
+): ResolvedWorkspacePath | { ok: false; error: string; status: 400 | 404 } {
+  const direct = resolveUnderWorkspace(workspacePath, relativePath);
+  if (!direct.ok) return direct;
+  if (isExistingFile(direct.abs)) return direct;
+
+  const suffix = direct.rel;
+  const matches = findWorkspaceFilesBySuffix(workspacePath, suffix);
+  if (matches.length === 0) {
+    return { ok: false, error: "file not found", status: 404 };
+  }
+  matches.sort(
+    (a, b) =>
+      a.rel.split("/").length - b.rel.split("/").length ||
+      a.rel.localeCompare(b.rel),
+  );
+  return matches[0]!;
+}
+
+/** Find files under workspace whose relative path equals or ends with suffix. */
+export function findWorkspaceFilesBySuffix(
+  workspacePath: string,
+  suffixPath: string,
+): Array<Extract<ResolvedWorkspacePath, { ok: true }>> {
+  const suffix = suffixPath.trim().replace(/\\/g, "/").replace(/^(\.\/)+/, "");
+  if (!suffix || suffix.includes("..")) return [];
+
+  const root = path.resolve(workspacePath);
+  const found: Array<Extract<ResolvedWorkspacePath, { ok: true }>> = [];
+  const seen = new Set<string>();
+
+  const pushIfMatch = (rel: string) => {
+    if (seen.has(rel)) return;
+    if (rel !== suffix && !rel.endsWith(`/${suffix}`)) return;
+    const resolved = resolveUnderWorkspace(workspacePath, rel);
+    if (!resolved.ok || !isExistingFile(resolved.abs)) return;
+    seen.add(rel);
+    found.push(resolved);
+  };
+
+  // Fast path: one- and two-level directory prefixes (nested git repos).
+  let topEntries: fs.Dirent[] = [];
+  try {
+    topEntries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  for (const ent of topEntries) {
+    if (!ent.isDirectory() || ent.name.startsWith(".") || SKIP_DIR_NAMES.has(ent.name)) {
+      continue;
+    }
+    pushIfMatch(`${ent.name}/${suffix}`);
+    let children: fs.Dirent[] = [];
+    try {
+      children = fs.readdirSync(path.join(root, ent.name), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const child of children) {
+      if (
+        !child.isDirectory() ||
+        child.name.startsWith(".") ||
+        SKIP_DIR_NAMES.has(child.name)
+      ) {
+        continue;
+      }
+      pushIfMatch(`${ent.name}/${child.name}/${suffix}`);
+    }
+  }
+  if (found.length > 0) return found;
+
+  // Fallback: bounded walk for deeper nesting.
+  const maxDepth = 8;
+  const walk = (dirAbs: string, depthLeft: number) => {
+    if (depthLeft < 0 || found.length >= 20) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dirAbs, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const ent of entries) {
+      if (ent.name.startsWith(".") || SKIP_DIR_NAMES.has(ent.name)) continue;
+      const childAbs = path.join(dirAbs, ent.name);
+      if (ent.isDirectory()) {
+        walk(childAbs, depthLeft - 1);
+      } else if (ent.isFile()) {
+        const rel = path.relative(root, childAbs).split(path.sep).join("/");
+        pushIfMatch(rel);
+      }
+    }
+  };
+  walk(root, maxDepth);
+  return found;
 }
 
 export function languageForExt(ext: string): string {
@@ -163,7 +291,7 @@ export function readWorkspaceFile(
 ):
   | { ok: true; path: string; content: string; language: string }
   | { ok: false; error: string; status: 400 | 404 | 413 } {
-  const resolved = resolveUnderWorkspace(workspacePath, relativePath);
+  const resolved = resolveExistingUnderWorkspace(workspacePath, relativePath);
   if (!resolved.ok) {
     return { ok: false, error: resolved.error, status: resolved.status };
   }
@@ -174,7 +302,7 @@ export function readWorkspaceFile(
       status: 400,
     };
   }
-  if (!fs.existsSync(resolved.abs)) {
+  if (!isExistingFile(resolved.abs)) {
     return { ok: false, error: "file not found", status: 404 };
   }
   const st = fs.statSync(resolved.abs);
@@ -207,7 +335,7 @@ export function readWorkspaceRaw(
 ):
   | { ok: true; path: string; body: Buffer; contentType: string }
   | { ok: false; error: string; status: 400 | 404 | 413 } {
-  const resolved = resolveUnderWorkspace(workspacePath, relativePath);
+  const resolved = resolveExistingUnderWorkspace(workspacePath, relativePath);
   if (!resolved.ok) {
     return { ok: false, error: resolved.error, status: resolved.status };
   }
@@ -218,7 +346,7 @@ export function readWorkspaceRaw(
       status: 400,
     };
   }
-  if (!fs.existsSync(resolved.abs)) {
+  if (!isExistingFile(resolved.abs)) {
     return { ok: false, error: "file not found", status: 404 };
   }
   const st = fs.statSync(resolved.abs);

@@ -181,13 +181,14 @@ export function App() {
             await api.createCard(boardId, {
               type: "task",
               title: title || "新任务",
-              column: "dev",
+              column: "design",
+              frozen: false,
             });
             setTitle("");
             await refresh();
           }}
         >
-          + 任务(开发列)
+          + 任务(待办列)
         </button>
         <button type="button" onClick={() => refresh()}>
           刷新
@@ -230,7 +231,7 @@ export function App() {
           title="确认删除卡片"
           message={
             pendingDeleteIsInFlight
-              ? `「${pendingDelete.title}」已离开设计列（在途）。删除会标记所属设计拆分需重新校验，且不可恢复。确认继续？`
+              ? `「${pendingDelete.title}」已离开待办列（在途）。删除会标记所属设计拆分需重新校验，且不可恢复。确认继续？`
               : `确定删除「${pendingDelete.title}」吗？评论与会话将一并删除，且不可恢复。`
           }
           confirmLabel="确认删除"

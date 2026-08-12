@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import type { ArtifactRef, CardType, ColumnId, RequirementStatus } from "@ai-workforce/domain";
+import { dedupeArtifacts } from "@ai-workforce/domain";
 import { SessionRepo } from "./sessions.js";
 
 export type Board = {
@@ -185,7 +186,7 @@ export class BoardRepo {
         input.epicId ?? null,
         input.designId ?? null,
         input.frozen ? 1 : 0,
-        JSON.stringify(input.artifacts ?? []),
+        JSON.stringify(dedupeArtifacts(input.artifacts ?? [])),
         status,
         now,
         now,
@@ -250,7 +251,9 @@ export class BoardRepo {
       activeJob: this.resolveActiveJob(row.lockedJobId || null),
       columnEnteredAt: row.columnEnteredAt || row.createdAt,
       splitVerifiedAt: row.splitVerifiedAt ?? null,
-      artifacts: JSON.parse(row.artifactsJson) as ArtifactRef[],
+      artifacts: dedupeArtifacts(
+        JSON.parse(row.artifactsJson) as ArtifactRef[],
+      ),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
@@ -336,6 +339,10 @@ export class BoardRepo {
     const next = {
       ...current,
       ...patch,
+      artifacts:
+        patch.artifacts !== undefined
+          ? dedupeArtifacts(patch.artifacts)
+          : current.artifacts,
       columnEnteredAt: columnChanged ? now : current.columnEnteredAt,
       updatedAt: now,
     };
@@ -716,7 +723,7 @@ export class BoardRepo {
         )
         .run(now, jobId);
       const card = this.getCard(job.cardId)!;
-      const merged = [...card.artifacts, ...input.artifacts];
+      const merged = dedupeArtifacts([...card.artifacts, ...input.artifacts]);
       this.db
         .prepare(
           `UPDATE cards SET locked_job_id=NULL, locked_at=NULL, artifacts_json=?, updated_at=? WHERE id=?`,

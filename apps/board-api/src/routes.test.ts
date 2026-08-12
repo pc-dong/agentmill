@@ -629,6 +629,28 @@ describe("routes", () => {
     });
   });
 
+  it("allows human design→dev for ad-hoc task without designId", async () => {
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "Ad-hoc",
+      column: "design",
+      description: "manual todo",
+      frozen: false,
+    });
+
+    const res = await app.request(`http://localhost/cards/${task.id}/move`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ to: "dev", actor: "human" }),
+    });
+    expect(res.status).toBe(200);
+    expect(repo.getCard(task.id)?.column).toBe("dev");
+    expect(repo.getCard(task.id)?.designId).toBeNull();
+  });
+
   it("rejects human-decision return_dev for frozen design-column task", async () => {
     const { app, repo } = appWithRepo();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });

@@ -5,7 +5,7 @@ import { requirementDerivedBadges, statusLabel } from "./derivedBadges";
 
 const COLUMNS: Array<{ id: string; label: string }> = [
   { id: "requirements", label: "需求" },
-  { id: "design", label: "设计" },
+  { id: "design", label: "待办" },
   { id: "dev", label: "开发" },
   { id: "test", label: "测试" },
   { id: "accept", label: "验收" },
@@ -319,7 +319,7 @@ export function BoardView(props: {
         })}
       </div>
       <p className="board-hint meta">
-        Epic 固定需求列；拆分任务落在设计列，校验通过后可拖入开发。设计卡用侧栏「拆分对齐/校验」。相关任务全部
+        Epic 固定需求列；拆分任务落在待办列，校验通过后可拖入开发。也可直接新建任务到待办列再拖入开发。设计卡用侧栏「拆分对齐/校验」。相关任务全部
         Done 后可将设计卡拖到 Done（需确认）。验收→Done 也需确认。
       </p>
       {preview && (

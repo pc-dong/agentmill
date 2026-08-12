@@ -367,17 +367,17 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
       if (card.frozen) {
         return c.json({ error: "任务仍冻结：请先通过「校验覆盖」" }, 400);
       }
-      if (!card.designId) {
-        return c.json({ error: "task missing designId" }, 400);
-      }
-      const design = repo.getCard(card.designId);
-      if (!design?.splitVerifiedAt) {
-        return c.json(
-          {
-            error: "拆分未校验或已变更：请重新「校验覆盖」后再拖入开发列",
-          },
-          400,
-        );
+      // Direct / ad-hoc tasks (no designId) may enter dev without split verify.
+      if (card.designId) {
+        const design = repo.getCard(card.designId);
+        if (!design?.splitVerifiedAt) {
+          return c.json(
+            {
+              error: "拆分未校验或已变更：请重新「校验覆盖」后再拖入开发列",
+            },
+            400,
+          );
+        }
       }
     }
     if (

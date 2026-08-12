@@ -83,6 +83,7 @@ export const api = {
       epicId?: string | null;
       status?: RequirementStatus;
       requirementIds?: string[];
+      frozen?: boolean;
     },
   ) =>
     json<Card>(

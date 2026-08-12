@@ -19,7 +19,11 @@ afterEach(() => {
   tmpFiles.length = 0;
 });
 
-function tempDb(): { repo: BoardRepo; sessions: SessionRepo } {
+function tempDb(): {
+  repo: BoardRepo;
+  sessions: SessionRepo;
+  db: ReturnType<typeof openDb>;
+} {
   const file = path.join(
     os.tmpdir(),
     `aiw-board-${Date.now()}-${Math.random().toString(16).slice(2)}.sqlite`,
@@ -27,7 +31,7 @@ function tempDb(): { repo: BoardRepo; sessions: SessionRepo } {
   tmpFiles.push(file);
   const db = openDb(file);
   migrate(db);
-  return { repo: new BoardRepo(db), sessions: new SessionRepo(db) };
+  return { repo: new BoardRepo(db), sessions: new SessionRepo(db), db };
 }
 
 describe("BoardRepo", () => {
@@ -381,6 +385,33 @@ describe("BoardRepo", () => {
     expect(again?.id).not.toBe(first.id);
   });
 
+  it("createPollJobs creates Dev poll when ad-hoc task enters dev", () => {
+    const { repo } = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const devEmp = repo.listEmployees(board.id).find((e) => e.role === "dev")!;
+    const task = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "Ad-hoc",
+      column: "design",
+      description: "",
+      frozen: false,
+    });
+    expect(repo.createPollJobs(board.id)).toBe(0);
+
+    const before = Date.now();
+    while (Date.now() <= before) {
+      /* spin */
+    }
+    repo.updateCard(task.id, { column: "dev" });
+    expect(repo.getCard(task.id)?.columnEnteredAt).toBeTruthy();
+    expect(repo.createPollJobs(board.id)).toBe(1);
+    const job = repo
+      .listOpenJobs(board.id)
+      .find((j) => j.cardId === task.id && j.employeeId === devEmp.id);
+    expect(job?.trigger).toBe("poll");
+  });
+
   it("completeJob writes artifacts and unlocks", () => {
     const { repo } = tempDb();
     const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
@@ -409,6 +440,67 @@ describe("BoardRepo", () => {
     expect(repo.listComments(epic.id).some((c) => c.body.includes("done"))).toBe(
       true,
     );
+  });
+
+  it("completeJob dedupes artifacts by kind and href", () => {
+    const { repo } = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const card = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      column: "dev",
+      description: "",
+      artifacts: [
+        { kind: "file", href: "docs/a.md", label: "A" },
+        { kind: "file", href: "docs/b.md", label: "B" },
+      ],
+    });
+    const emp = repo.listEmployees(board.id).find((e) => e.role === "dev")!;
+    const job = repo.createJob({
+      boardId: board.id,
+      cardId: card.id,
+      employeeId: emp.id,
+      trigger: "poll",
+    });
+    repo.claimJob(job.id, "worker-1");
+    repo.completeJob(job.id, {
+      summary: "SUMMARY: again",
+      artifacts: [
+        { kind: "file", href: "docs/a.md", label: "A-new" },
+        { kind: "file", href: "docs/c.md", label: "C" },
+      ],
+    });
+    const updated = repo.getCard(card.id)!;
+    expect(updated.artifacts).toEqual([
+      { kind: "file", href: "docs/a.md", label: "A-new" },
+      { kind: "file", href: "docs/b.md", label: "B" },
+      { kind: "file", href: "docs/c.md", label: "C" },
+    ]);
+  });
+
+  it("getCard dedupes legacy duplicate artifacts on read", () => {
+    const { repo, db } = tempDb();
+    const board = repo.createBoard({ name: "D", workspacePath: "/tmp/w" });
+    const card = repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "T",
+      column: "design",
+      description: "",
+    });
+    db.prepare(`UPDATE cards SET artifacts_json=? WHERE id=?`).run(
+      JSON.stringify([
+        { kind: "file", href: "docs/a.md", label: "A" },
+        { kind: "file", href: "docs/a.md", label: "A2" },
+        { kind: "file", href: "docs/b.md" },
+      ]),
+      card.id,
+    );
+    expect(repo.getCard(card.id)?.artifacts).toEqual([
+      { kind: "file", href: "docs/a.md", label: "A2" },
+      { kind: "file", href: "docs/b.md" },
+    ]);
   });
 
   it("claimJob returns null when card has an open chat session", () => {

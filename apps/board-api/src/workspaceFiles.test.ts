@@ -106,4 +106,32 @@ describe("workspaceFiles", () => {
     ).toBe("docs/epics/E-DEMO-001-login");
     expect(inferEpicDocsRoot("src/App.java")).toBeNull();
   });
+
+  it("resolves nested-repo-relative paths under workspace root", () => {
+    const ws = tempWs();
+    const nested = path.join(
+      ws,
+      "up-masterdata-service/productms-commerce/domain/lib/src/test/java",
+    );
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(nested, "FooTest.java"), "class FooTest {}");
+
+    const missingDirect = readWorkspaceFile(
+      ws,
+      "productms-commerce/domain/lib/src/test/java/FooTest.java",
+    );
+    expect(missingDirect.ok).toBe(true);
+    if (missingDirect.ok) {
+      expect(missingDirect.path).toBe(
+        "up-masterdata-service/productms-commerce/domain/lib/src/test/java/FooTest.java",
+      );
+      expect(missingDirect.content).toContain("FooTest");
+    }
+  });
+
+  it("still rejects path escape when searching by suffix", () => {
+    const ws = tempWs();
+    expect(readWorkspaceFile(ws, "../outside.java").ok).toBe(false);
+    expect(resolveUnderWorkspace(ws, "../outside.java").ok).toBe(false);
+  });
 });

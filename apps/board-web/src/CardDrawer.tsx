@@ -106,7 +106,7 @@ function DesignRoundPanel(props: {
   return (
     <section className="design-round-panel">
       <h4>开一轮设计</h4>
-      <p className="meta">勾选需求后创建设计卡（进入设计列）</p>
+      <p className="meta">勾选需求后创建设计卡（进入待办列）</p>
       {candidates.length === 0 ? (
         <p className="meta">该 Epic 下暂无 open / in_progress 需求</p>
       ) : (
@@ -203,6 +203,23 @@ export function CardDrawer(props: {
     () => requirementDerivedBadges(props.card, props.cards),
     [props.card, props.cards],
   );
+
+  const uniqueArtifacts = useMemo(() => {
+    const map = new Map<string, (typeof props.card.artifacts)[number]>();
+    for (const a of props.card.artifacts) {
+      const href = a.href.trim();
+      if (!href) continue;
+      const key = `${a.kind}:${href}`;
+      const prev = map.get(key);
+      if (!prev) {
+        map.set(key, { ...a, href });
+        continue;
+      }
+      if (prev.label?.trim() && !a.label?.trim()) continue;
+      map.set(key, { ...a, href });
+    }
+    return [...map.values()];
+  }, [props.card.artifacts]);
 
   const relatedSplitTasks = useMemo(() => {
     if (props.card.type !== "design") return [];
@@ -340,7 +357,7 @@ export function CardDrawer(props: {
           setPipelineTone("ok");
           setPipelineNote(
             kind === "split"
-              ? "拆分已完成：请查看下方评论，并在「设计」列确认新任务卡（校验通过前为冻结，通过后可拖入开发列）。"
+              ? "拆分已完成：请查看下方评论，并在「待办」列确认新任务卡（校验通过前为冻结，通过后可拖入开发列）。"
               : "校验已完成：请查看下方评论中的 VERIFY 结论；通过后可将任务拖入开发列。",
           );
           props.onChanged();
@@ -488,7 +505,7 @@ export function CardDrawer(props: {
         </div>
       )}
       {(props.card.epicId ||
-        props.card.artifacts.length > 0 ||
+        uniqueArtifacts.length > 0 ||
         props.card.type === "epic" ||
         props.card.type === "design") && (
         <section className="card-links">
@@ -499,10 +516,10 @@ export function CardDrawer(props: {
               <strong>{epicTitle ?? props.card.epicId}</strong>
             </p>
           )}
-          {props.card.artifacts.length > 0 ? (
+          {uniqueArtifacts.length > 0 ? (
             <ul className="artifact-list">
-              {props.card.artifacts.map((a, i) => (
-                <li key={`${a.kind}-${a.href}-${i}`}>
+              {uniqueArtifacts.map((a) => (
+                <li key={`${a.kind}-${a.href}`}>
                   {a.kind === "file" ? (
                     <>
                       <span className="artifact-kind">file</span>{" "}
@@ -734,7 +751,7 @@ export function CardDrawer(props: {
               </p>
             )}
             <p className="meta">
-              流程：拆分任务 → 拆分对齐 → 校验覆盖 → 完成→Done。拆分会在「设计」列创建冻结任务；校验通过后可拖入开发列。相关任务全部
+              流程：拆分任务 → 拆分对齐 → 校验覆盖 → 完成→Done。拆分会在「待办」列创建冻结任务；校验通过后可拖入开发列。相关任务全部
               Done 后可将设计卡移入 Done。
             </p>
           </div>
@@ -747,7 +764,7 @@ export function CardDrawer(props: {
         <>
           {props.card.column !== "design" && (
             <p className="design-pipeline-banner tone-wait" role="status">
-              此卡已离开设计列：拆分结构变更不会自动作用于此卡；删除需确认。
+              此卡已离开待办列：拆分结构变更不会自动作用于此卡；删除需确认。
             </p>
           )}
           <SplitChat
