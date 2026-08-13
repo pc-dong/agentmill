@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentEvent } from "./types.js";
 
 const mockSend = vi.fn();
@@ -41,6 +44,14 @@ function assistantStream(text: string) {
   };
 }
 
+const tmpDirs: string[] = [];
+
+function makeWs(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-cursor-ws-"));
+  tmpDirs.push(dir);
+  return dir;
+}
+
 describe("CursorDriver", () => {
   beforeEach(() => {
     vi.mocked(Agent.create).mockClear();
@@ -51,14 +62,21 @@ describe("CursorDriver", () => {
     });
   });
 
+  afterEach(() => {
+    for (const d of tmpDirs.splice(0)) {
+      fs.rmSync(d, { recursive: true, force: true });
+    }
+  });
+
   it("oneshot uses Agent.create, send, and stream", async () => {
+    const ws = makeWs();
     const d = new CursorDriver({
       apiKey: "test-key",
       modelId: "composer-2.5",
     });
     const onProgress = vi.fn();
     const result = await d.oneshot({
-      workspacePath: "/tmp/ws",
+      workspacePath: ws,
       prompt: "hello",
       role: "design",
       cardId: "c1",
@@ -68,10 +86,19 @@ describe("CursorDriver", () => {
     expect(Agent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         apiKey: "test-key",
-        local: { cwd: "/tmp/ws" },
+        local: expect.objectContaining({
+          cwd: ws,
+          dirs: [ws],
+          sandboxOptions: { enabled: true },
+        }),
       }),
     );
-    expect(mockSend).toHaveBeenCalledWith("hello");
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.stringContaining("WORKSPACE BOUNDARY"),
+    );
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.stringContaining(`Workspace root (absolute): ${ws}`),
+    );
     expect(result.status).toBe("ok");
     expect(result.artifacts[0]?.href).toBe("docs/x.md");
     expect(onProgress).toHaveBeenCalled();
@@ -81,10 +108,11 @@ describe("CursorDriver", () => {
   });
 
   it("returns error when Agent.create throws", async () => {
+    const ws = makeWs();
     vi.mocked(Agent.create).mockRejectedValueOnce(new Error("sdk failed"));
     const d = new CursorDriver({ apiKey: "k", modelId: "m" });
     const result = await d.oneshot({
-      workspacePath: "/tmp",
+      workspacePath: ws,
       prompt: "x",
       role: "design",
       cardId: "c1",
@@ -96,12 +124,13 @@ describe("CursorDriver", () => {
   });
 
   it("returns error when stream yields no assistant text", async () => {
+    const ws = makeWs();
     mockSend.mockResolvedValueOnce({
       stream: async function* () {},
     });
     const d = new CursorDriver({ apiKey: "k", modelId: "m" });
     const result = await d.oneshot({
-      workspacePath: "/tmp",
+      workspacePath: ws,
       prompt: "x",
       role: "design",
       cardId: "c1",
@@ -112,10 +141,11 @@ describe("CursorDriver", () => {
   });
 
   it("chatStream uses Agent.create, send, and stream", async () => {
+    const ws = makeWs();
     const d = new CursorDriver({ apiKey: "test-key", modelId: "composer-2.5" });
     const events = await collectEvents(
       d.chatStream({
-        workspacePath: "/tmp/ws",
+        workspacePath: ws,
         role: "design",
         cardId: "c1",
         boardId: "b1",
@@ -131,11 +161,12 @@ describe("CursorDriver", () => {
   });
 
   it("chatStream yields error when Agent.create throws", async () => {
+    const ws = makeWs();
     vi.mocked(Agent.create).mockRejectedValueOnce(new Error("create failed"));
     const d = new CursorDriver({ apiKey: "k", modelId: "m" });
     const events = await collectEvents(
       d.chatStream({
-        workspacePath: "/tmp",
+        workspacePath: ws,
         role: "design",
         cardId: "c1",
         boardId: "b1",
@@ -147,11 +178,12 @@ describe("CursorDriver", () => {
   });
 
   it("chatStream yields error when send throws", async () => {
+    const ws = makeWs();
     mockSend.mockRejectedValueOnce(new Error("send failed"));
     const d = new CursorDriver({ apiKey: "k", modelId: "m" });
     const events = await collectEvents(
       d.chatStream({
-        workspacePath: "/tmp",
+        workspacePath: ws,
         role: "design",
         cardId: "c1",
         boardId: "b1",

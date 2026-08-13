@@ -20,5 +20,16 @@ describe("buildPrompt", () => {
       description: "desc",
     });
     expect(prompt).toContain("TASK <title> | <description>");
+    expect(prompt).toContain("WORKSPACE BOUNDARY");
+  });
+
+  it("includes absolute workspace root when provided", () => {
+    const prompt = buildPrompt(
+      "dev",
+      { title: "T", column: "dev", description: "" },
+      { workspacePath: "/tmp/my-ws" },
+    );
+    expect(prompt).toContain("Workspace root (absolute): /tmp/my-ws");
+    expect(prompt).toContain("sibling/parent clones");
   });
 });

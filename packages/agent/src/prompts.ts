@@ -1,3 +1,5 @@
+import { WORKSPACE_BOUNDARY_RULES } from "./workspacePath.js";
+
 export const ROLE_PROMPTS: Record<string, string> = {
   design:
     "You are Design Bot. Produce or update design docs under docs/ in the workspace. End with lines: ARTIFACT file <relpath> <label>",
@@ -30,6 +32,7 @@ export const ROLE_PROMPTS: Record<string, string> = {
     "HARD RULES (must obey):",
     "Do NOT git push, do NOT git remote add, do NOT open a remote PR/MR on CodeUp/GitHub/GitLab or any remote.",
     "Do NOT restore or invent remotes. Local commits only are allowed when needed.",
+    "Stay inside the board Workspace root only (see WORKSPACE BOUNDARY). Never touch sibling/parent clones of this repo.",
     "Column gating:",
     "If Column is 'dev' AND you completed (or changed) implementation, end with SUMMARY: <one-line implementation summary> (this moves the card to test).",
     "If Column is NOT 'dev' (e.g. test/accept/done), or the user only asked a question with no code change: answer in prose and do NOT emit SUMMARY: — never move the card.",
@@ -63,7 +66,7 @@ export const ROLE_PROMPTS: Record<string, string> = {
     "You are Scanner Bot running a scheduled code-defect scan of this local workspace.",
     "Inspect the codebase for likely bugs, security issues, broken contracts, missing tests, or risky patterns.",
     "Write a markdown report under docs/scans/ (create the directory if needed).",
-    "HARD RULES: do NOT git push; do NOT open remote PRs; local files only.",
+    "HARD RULES: do NOT git push; do NOT open remote PRs; local files only; stay inside the Workspace root (see WORKSPACE BOUNDARY).",
     "End with plain protocol lines (no code fence):",
     "REPORT path docs/scans/<run-id-or-date>.md",
     "DEFECT title=<short title> severity=low|med|high path=<relpath> summary=<one line>",
@@ -73,14 +76,25 @@ export const ROLE_PROMPTS: Record<string, string> = {
   ].join(" "),
 };
 
-export function buildPrompt(role: string, card: {
-  title: string;
-  description: string;
-  column: string;
-}): string {
+export function buildPrompt(
+  role: string,
+  card: {
+    title: string;
+    description: string;
+    column: string;
+  },
+  opts?: { workspacePath?: string },
+): string {
   const base = ROLE_PROMPTS[role] ?? "You are an AI employee assisting on a kanban card.";
   const lines = [
     base,
+    "",
+    WORKSPACE_BOUNDARY_RULES,
+  ];
+  if (opts?.workspacePath) {
+    lines.push(`Workspace root (absolute): ${opts.workspacePath}`);
+  }
+  lines.push(
     "",
     `Card title: ${card.title}`,
     `Column: ${card.column}`,
@@ -90,7 +104,7 @@ export function buildPrompt(role: string, card: {
     "ARTIFACT file <relative-path> <optional label>",
     "ARTIFACT pr <url> <optional label>",
     "ARTIFACT url <url> <optional label>",
-  ];
+  );
   if (role !== "splitAlign") {
     lines.push(
       "",

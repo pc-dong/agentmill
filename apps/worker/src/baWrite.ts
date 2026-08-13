@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  assertUnderWorkspace,
   epicDirRel,
   prdRel,
   type BaSettleProtocol,
@@ -29,17 +30,18 @@ function fillTemplate(
 }
 
 function writeUtf8File(
-  absPath: string,
-  content: string,
+  workspacePath: string,
   rel: string,
+  content: string,
   written: string[],
   overwritten: string[],
 ): void {
-  const existed = fs.existsSync(absPath);
-  fs.mkdirSync(path.dirname(absPath), { recursive: true });
-  fs.writeFileSync(absPath, content, "utf8");
-  if (existed) overwritten.push(rel);
-  else written.push(rel);
+  const resolved = assertUnderWorkspace(workspacePath, rel);
+  const existed = fs.existsSync(resolved.abs);
+  fs.mkdirSync(path.dirname(resolved.abs), { recursive: true });
+  fs.writeFileSync(resolved.abs, content, "utf8");
+  if (existed) overwritten.push(resolved.rel);
+  else written.push(resolved.rel);
 }
 
 function patchEpicIndex(
@@ -97,6 +99,10 @@ export async function writeBaDocuments(input: {
   const sharedRel = `${dirRel}/shared-context.md`;
   const prdPathRel = prdRel(protocol);
 
+  // Reject path-escaping slugs early.
+  assertUnderWorkspace(workspacePath, epicRel);
+  assertUnderWorkspace(workspacePath, prdPathRel);
+
   const common = {
     EPIC_TITLE: protocol.epicTitle,
     EPIC_ID: protocol.epicId,
@@ -120,23 +126,23 @@ export async function writeBaDocuments(input: {
     );
 
     writeUtf8File(
-      path.join(workspacePath, epicRel),
-      fillTemplate(epicTpl, { ...common, SLUG: protocol.epicSlug }),
+      workspacePath,
       epicRel,
+      fillTemplate(epicTpl, { ...common, SLUG: protocol.epicSlug }),
       written,
       overwritten,
     );
     writeUtf8File(
-      path.join(workspacePath, sharedRel),
-      fillTemplate(sharedTpl, { ...common, SLUG: protocol.epicSlug }),
+      workspacePath,
       sharedRel,
+      fillTemplate(sharedTpl, { ...common, SLUG: protocol.epicSlug }),
       written,
       overwritten,
     );
     writeUtf8File(
-      path.join(workspacePath, prdPathRel),
-      fillTemplate(prdTpl, { ...common, SLUG: protocol.prdSlug }),
+      workspacePath,
       prdPathRel,
+      fillTemplate(prdTpl, { ...common, SLUG: protocol.prdSlug }),
       written,
       overwritten,
     );
@@ -146,14 +152,14 @@ export async function writeBaDocuments(input: {
       "utf8",
     );
     writeUtf8File(
-      path.join(workspacePath, prdPathRel),
-      fillTemplate(prdTpl, { ...common, SLUG: protocol.prdSlug }),
+      workspacePath,
       prdPathRel,
+      fillTemplate(prdTpl, { ...common, SLUG: protocol.prdSlug }),
       written,
       overwritten,
     );
 
-    const epicAbs = path.join(workspacePath, epicRel);
+    const epicAbs = assertUnderWorkspace(workspacePath, epicRel).abs;
     // Link mode: if EPIC.md is missing, skip index patch (do not create EPIC).
     if (fs.existsSync(epicAbs)) {
       patchEpicIndex(epicAbs, protocol);

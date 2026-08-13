@@ -125,11 +125,15 @@ export async function executeClaimedJob(
             `Column: ${card.column}`,
             `Description: ${card.description}`,
           ].join("\n")
-        : buildPrompt(employee.role, {
-            title: card.title,
-            description: card.description,
-            column: card.column,
-          });
+        : buildPrompt(
+            employee.role,
+            {
+              title: card.title,
+              description: card.description,
+              column: card.column,
+            },
+            { workspacePath: board.workspacePath },
+          );
 
     let prompt = promptBase;
     if (employee.role === "split" && card.type === "design") {

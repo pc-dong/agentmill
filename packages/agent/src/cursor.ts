@@ -9,6 +9,10 @@ import type {
   RunInput,
   RunResult,
 } from "./types.js";
+import {
+  normalizeWorkspaceRoot,
+  WORKSPACE_BOUNDARY_RULES,
+} from "./workspacePath.js";
 
 function assistantTextFromMessage(message: SDKAssistantMessage): string {
   return message.message.content
@@ -40,6 +44,24 @@ function progressFromTail(fullText: string): string {
   return `执行中：…${trimmed.slice(-PROGRESS_TAIL)}`;
 }
 
+function localAgentOptions(workspacePath: string) {
+  const cwd = normalizeWorkspaceRoot(workspacePath);
+  return {
+    cwd,
+    dirs: [cwd],
+    sandboxOptions: { enabled: true },
+  };
+}
+
+function withWorkspaceBoundary(prompt: string, workspaceRoot: string): string {
+  return [
+    WORKSPACE_BOUNDARY_RULES,
+    `Workspace root (absolute): ${workspaceRoot}`,
+    "",
+    prompt,
+  ].join("\n");
+}
+
 export function composeChatPrompt(input: ChatInput): string {
   const roleLine =
     ROLE_PROMPTS[input.role] ??
@@ -47,10 +69,23 @@ export function composeChatPrompt(input: ChatInput): string {
   const lines = [
     roleLine,
     "",
+    WORKSPACE_BOUNDARY_RULES,
+  ];
+  if (input.workspacePath) {
+    try {
+      lines.push(
+        `Workspace root (absolute): ${normalizeWorkspaceRoot(input.workspacePath)}`,
+      );
+    } catch {
+      lines.push(`Workspace root: ${input.workspacePath}`);
+    }
+  }
+  lines.push(
+    "",
     `Card ${input.cardId} on board ${input.boardId}.`,
     "",
     "Conversation history:",
-  ];
+  );
   for (const turn of input.history) {
     const speaker = turn.role === "user" ? "User" : "Assistant";
     lines.push(`${speaker}: ${turn.content}`);
@@ -72,14 +107,17 @@ export class CursorDriver implements AgentDriver {
 
     try {
       reportProgress(input.onProgress, "执行中：调用 Cursor Agent…");
+      const local = localAgentOptions(input.workspacePath);
       agent = await Agent.create({
         apiKey: this.opts.apiKey,
         model: { id: this.opts.modelId },
-        local: { cwd: input.workspacePath },
+        local,
       });
 
       reportProgress(input.onProgress, "执行中：已创建 Agent，发送任务…");
-      const run = await agent.send(input.prompt);
+      const run = await agent.send(
+        withWorkspaceBoundary(input.prompt, local.cwd),
+      );
       let fullText = "";
       let lastReportAt = 0;
       let charsSinceReport = 0;
@@ -148,13 +186,17 @@ export class CursorDriver implements AgentDriver {
         return;
       }
 
+      const local = localAgentOptions(input.workspacePath);
       agent = await Agent.create({
         apiKey: this.opts.apiKey,
         model: { id: this.opts.modelId },
-        local: { cwd: input.workspacePath },
+        local,
       });
 
-      const composedPrompt = composeChatPrompt(input);
+      const composedPrompt = composeChatPrompt({
+        ...input,
+        workspacePath: local.cwd,
+      });
       run = await agent.send(composedPrompt);
       let fullText = "";
 
