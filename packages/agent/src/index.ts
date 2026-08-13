@@ -3,6 +3,7 @@ export * from "./parse.js";
 export * from "./parseBaSettle.js";
 export * from "./parseSplitSettle.js";
 export * from "./parseOutcome.js";
+export * from "./parseScanOutcome.js";
 export * from "./mock.js";
 export * from "./cursor.js";
 export * from "./prompts.js";

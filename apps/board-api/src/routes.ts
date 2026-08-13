@@ -1156,5 +1156,178 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     });
   });
 
+  app.get("/boards/:boardId/schedules", (c) => {
+    const boardId = c.req.param("boardId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    repo.ensureScannerEmployee(boardId);
+    return c.json(repo.listSchedules(boardId));
+  });
+
+  app.get("/boards/:boardId/schedule-runs", (c) => {
+    const boardId = c.req.param("boardId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    const scheduleId = c.req.query("scheduleId") || undefined;
+    const limitRaw = c.req.query("limit");
+    const limit = limitRaw ? Number(limitRaw) : 50;
+    return c.json(
+      repo.listScheduleRuns(boardId, {
+        scheduleId,
+        limit: Number.isFinite(limit) ? limit : 50,
+      }),
+    );
+  });
+
+  app.post("/boards/:boardId/schedules", async (c) => {
+    const boardId = c.req.param("boardId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    repo.ensureScannerEmployee(boardId);
+    const body = z
+      .object({
+        name: z.string().min(1),
+        template: z.literal("code_scan").optional(),
+        enabled: z.boolean().optional(),
+        cron: z.string().min(1).optional(),
+        intervalHours: z.number().positive().max(24 * 30).optional(),
+        nextRunAt: z.string().optional(),
+        config: z
+          .object({
+            focusHint: z.string().optional(),
+            autoCreateTasks: z.boolean().optional(),
+            maxDefects: z.number().int().positive().max(50).optional(),
+          })
+          .optional(),
+      })
+      .refine((b) => Boolean(b.cron?.trim()) || b.intervalHours != null, {
+        message: "cron or intervalHours required",
+      })
+      .parse(await c.req.json());
+    try {
+      const schedule = repo.createSchedule({
+        boardId,
+        name: body.name,
+        template: body.template ?? "code_scan",
+        enabled: body.enabled,
+        cron: body.cron,
+        intervalHours: body.intervalHours,
+        nextRunAt: body.nextRunAt,
+        config: body.config,
+      });
+      return c.json(schedule, 201);
+    } catch (e) {
+      return c.json(
+        { error: e instanceof Error ? e.message : String(e) },
+        400,
+      );
+    }
+  });
+
+  app.patch("/boards/:boardId/schedules/:scheduleId", async (c) => {
+    const boardId = c.req.param("boardId");
+    const scheduleId = c.req.param("scheduleId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    const existing = repo.getSchedule(scheduleId);
+    if (!existing || existing.boardId !== boardId) {
+      return c.json({ error: "not found" }, 404);
+    }
+    const body = z
+      .object({
+        name: z.string().min(1).optional(),
+        enabled: z.boolean().optional(),
+        cron: z.string().min(1).optional(),
+        intervalHours: z.number().positive().max(24 * 30).optional(),
+        nextRunAt: z.string().optional(),
+        config: z
+          .object({
+            focusHint: z.string().optional(),
+            autoCreateTasks: z.boolean().optional(),
+            maxDefects: z.number().int().positive().max(50).optional(),
+          })
+          .optional(),
+      })
+      .parse(await c.req.json());
+    try {
+      const updated = repo.updateSchedule(scheduleId, {
+        ...body,
+        config: body.config
+          ? { ...existing.config, ...body.config }
+          : undefined,
+      });
+      return c.json(updated);
+    } catch (e) {
+      return c.json(
+        { error: e instanceof Error ? e.message : String(e) },
+        400,
+      );
+    }
+  });
+
+  app.delete("/boards/:boardId/schedules/:scheduleId", (c) => {
+    const boardId = c.req.param("boardId");
+    const scheduleId = c.req.param("scheduleId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    const existing = repo.getSchedule(scheduleId);
+    if (!existing || existing.boardId !== boardId) {
+      return c.json({ error: "not found" }, 404);
+    }
+    repo.deleteSchedule(scheduleId);
+    return c.json({ ok: true });
+  });
+
+  app.post("/boards/:boardId/schedules/due", (c) => {
+    const boardId = c.req.param("boardId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    repo.ensureScannerEmployee(boardId);
+    const enqueued = repo.processDueSchedules(boardId);
+    return c.json({ enqueued });
+  });
+
+  app.post("/boards/:boardId/schedules/:scheduleId/run", (c) => {
+    const boardId = c.req.param("boardId");
+    const scheduleId = c.req.param("scheduleId");
+    if (!repo.getBoard(boardId)) return c.json({ error: "not found" }, 404);
+    const existing = repo.getSchedule(scheduleId);
+    if (!existing || existing.boardId !== boardId) {
+      return c.json({ error: "not found" }, 404);
+    }
+    repo.ensureScannerEmployee(boardId);
+    const result = repo.enqueueScheduleRun(scheduleId, {
+      force: true,
+      trigger: "manual",
+    });
+    if (!result) return c.json({ error: "enqueue failed" }, 500);
+    return c.json({
+      schedule: result.schedule,
+      runCard: result.runCard,
+      job: result.job,
+      run: result.run,
+    });
+  });
+
+  /** Approve (unfreeze) scan defect tasks linked to a run card via description. */
+  app.post("/cards/:cardId/approve-scan-defects", (c) => {
+    const card = repo.getCard(c.req.param("cardId"));
+    if (!card) return c.json({ error: "not found" }, 404);
+    const cards = repo.listCards(card.boardId);
+    const marker = `scan_run: ${card.id}`;
+    let approved = 0;
+    for (const t of cards) {
+      if (
+        t.type === "task" &&
+        t.frozen &&
+        t.column === "design" &&
+        t.description.includes(marker)
+      ) {
+        repo.updateCard(t.id, { frozen: false });
+        approved++;
+      }
+    }
+    repo.addComment({
+      cardId: card.id,
+      author: "human",
+      body: `[audit] approved ${approved} scan defect task(s)`,
+    });
+    return c.json({ approved });
+  });
+
   return app;
 }

@@ -17,6 +17,43 @@ export type ArtifactHint = {
 
 export type RequirementStatus = "open" | "in_progress" | "done";
 
+export type ScheduleConfig = {
+  focusHint?: string;
+  autoCreateTasks?: boolean;
+  maxDefects?: number;
+};
+
+export type Schedule = {
+  id: string;
+  boardId: string;
+  name: string;
+  template: string;
+  enabled: boolean;
+  cron: string;
+  intervalHours: number;
+  nextRunAt: string;
+  lastRunAt: string | null;
+  config: ScheduleConfig;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ScheduleRun = {
+  id: string;
+  scheduleId: string;
+  boardId: string;
+  runCardId: string | null;
+  jobId: string | null;
+  status: "queued" | "running" | "done" | "failed";
+  trigger: "due" | "manual";
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  createdAt: string;
+  runCardTitle?: string | null;
+  scheduleName?: string | null;
+};
+
 export type Card = {
   id: string;
   boardId: string;
@@ -123,6 +160,7 @@ export const api = {
       description?: string;
       epicId?: string | null;
       status?: RequirementStatus;
+      frozen?: boolean;
     },
   ) =>
     json<Card>(
@@ -130,6 +168,81 @@ export const api = {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
+      }),
+    ),
+  approveScanDefects: (cardId: string) =>
+    json<{ approved: number }>(
+      fetch(`${base}/cards/${cardId}/approve-scan-defects`, {
+        method: "POST",
+      }),
+    ),
+  listSchedules: (boardId: string) =>
+    json<Schedule[]>(fetch(`${base}/boards/${boardId}/schedules`)),
+  listScheduleRuns: (
+    boardId: string,
+    opts?: { scheduleId?: string; limit?: number },
+  ) => {
+    const q = new URLSearchParams();
+    if (opts?.scheduleId) q.set("scheduleId", opts.scheduleId);
+    if (opts?.limit) q.set("limit", String(opts.limit));
+    const qs = q.toString();
+    return json<ScheduleRun[]>(
+      fetch(
+        `${base}/boards/${boardId}/schedule-runs${qs ? `?${qs}` : ""}`,
+      ),
+    );
+  },
+  createSchedule: (
+    boardId: string,
+    body: {
+      name: string;
+      cron?: string;
+      intervalHours?: number;
+      enabled?: boolean;
+      config?: ScheduleConfig;
+    },
+  ) =>
+    json<Schedule>(
+      fetch(`${base}/boards/${boardId}/schedules`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    ),
+  updateSchedule: (
+    boardId: string,
+    scheduleId: string,
+    body: Partial<{
+      name: string;
+      enabled: boolean;
+      cron: string;
+      intervalHours: number;
+      nextRunAt: string;
+      config: ScheduleConfig;
+    }>,
+  ) =>
+    json<Schedule>(
+      fetch(`${base}/boards/${boardId}/schedules/${scheduleId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    ),
+  deleteSchedule: (boardId: string, scheduleId: string) =>
+    json<{ ok: true }>(
+      fetch(`${base}/boards/${boardId}/schedules/${scheduleId}`, {
+        method: "DELETE",
+      }),
+    ),
+  runSchedule: (boardId: string, scheduleId: string) =>
+    json<{
+      schedule: Schedule;
+      runCard: Card;
+      job: { id: string };
+      run: ScheduleRun;
+    }>(
+      fetch(`${base}/boards/${boardId}/schedules/${scheduleId}/run`, {
+        method: "POST",
       }),
     ),
   deleteCard: (cardId: string, opts?: { confirmDelete?: boolean }) =>

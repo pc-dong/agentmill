@@ -113,7 +113,37 @@ export function migrate(db: Database.Database): void {
       created_at TEXT NOT NULL,
       PRIMARY KEY (design_id, requirement_id)
     );
+
+    CREATE TABLE IF NOT EXISTS schedules (
+      id TEXT PRIMARY KEY,
+      board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      template TEXT NOT NULL DEFAULT 'code_scan',
+      enabled INTEGER NOT NULL DEFAULT 1,
+      interval_hours REAL NOT NULL DEFAULT 24,
+      next_run_at TEXT NOT NULL,
+      last_run_at TEXT,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS schedule_runs (
+      id TEXT PRIMARY KEY,
+      schedule_id TEXT NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
+      board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+      run_card_id TEXT,
+      job_id TEXT,
+      status TEXT NOT NULL,
+      trigger TEXT NOT NULL,
+      error TEXT,
+      started_at TEXT NOT NULL,
+      finished_at TEXT,
+      created_at TEXT NOT NULL
+    );
   `);
+
+  ensureColumn(db, "schedules", "cron", "TEXT");
 
   // Default requirement status for existing rows.
   db.prepare(
@@ -131,6 +161,33 @@ export function migrate(db: Database.Database): void {
   migrateStrandedEpicsToDesignCards(db);
   migrateDesignCardsOffSplitVerify(db);
   migrateSplitVerifyEmployeeWatchColumns(db);
+  migrateEnsureScannerEmployees(db);
+  migrateBackfillScheduleCron(db);
+}
+
+/** Backfill cron from legacy interval_hours when missing. */
+function migrateBackfillScheduleCron(db: Database.Database): void {
+  const rows = db
+    .prepare(
+      `SELECT id, interval_hours as intervalHours, cron
+       FROM schedules WHERE cron IS NULL OR cron = ''`,
+    )
+    .all() as Array<{ id: string; intervalHours: number; cron: string | null }>;
+  if (rows.length === 0) return;
+  // Lazy import avoided — inline simple mapping to keep migrate sync without circular deps.
+  const map = (hours: number): string => {
+    const h = Math.max(1, Math.round(hours || 24));
+    if (h === 1) return "0 * * * *";
+    if (h < 24 && 24 % h === 0) return `0 */${h} * * *`;
+    if (h === 24) return "0 9 * * *";
+    if (h === 24 * 7) return "0 9 * * 1";
+    if (h < 24) return `0 */${h} * * *`;
+    return "0 9 * * *";
+  };
+  const upd = db.prepare(`UPDATE schedules SET cron = ? WHERE id = ?`);
+  for (const r of rows) {
+    upd.run(map(r.intervalHours), r.id);
+  }
 }
 
 /** Design cards no longer occupy split/verify — pull them back to design. */
@@ -148,6 +205,22 @@ function migrateSplitVerifyEmployeeWatchColumns(db: Database.Database): void {
     `UPDATE employees SET watch_columns_json = '[]'
      WHERE role IN ('split', 'verify')`,
   ).run();
+}
+
+/** Ensure every board has a Scanner Bot (button/schedule only). */
+function migrateEnsureScannerEmployees(db: Database.Database): void {
+  const boards = db.prepare(`SELECT id FROM boards`).all() as Array<{ id: string }>;
+  const hasScanner = db.prepare(
+    `SELECT id FROM employees WHERE board_id = ? AND role = 'scanner' LIMIT 1`,
+  );
+  const insert = db.prepare(
+    `INSERT INTO employees (id, board_id, role, display_name, watch_columns_json, adapter)
+     VALUES (?, ?, 'scanner', 'Scanner Bot', '[]', 'cursor')`,
+  );
+  for (const b of boards) {
+    if (hasScanner.get(b.id)) continue;
+    insert.run(randomUUID(), b.id);
+  }
 }
 
 /**

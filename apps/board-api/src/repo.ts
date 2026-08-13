@@ -2,6 +2,12 @@ import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import type { ArtifactRef, CardType, ColumnId, RequirementStatus } from "@ai-workforce/domain";
 import { dedupeArtifacts } from "@ai-workforce/domain";
+import {
+  assertValidCron,
+  cronFromIntervalHours,
+  estimateIntervalHoursFromCron,
+  nextCronRunAt,
+} from "./cron.js";
 import { SessionRepo } from "./sessions.js";
 
 export type Board = {
@@ -78,6 +84,53 @@ export type JobRecord = {
   finishedAt: string | null;
 };
 
+export type ScheduleConfig = {
+  focusHint?: string;
+  autoCreateTasks?: boolean;
+  maxDefects?: number;
+};
+
+export type ScheduleRecord = {
+  id: string;
+  boardId: string;
+  name: string;
+  template: string;
+  enabled: boolean;
+  /** 5-field cron (minute hour dom month dow), local timezone. */
+  cron: string;
+  /** Legacy / display hint; derived from cron when possible. */
+  intervalHours: number;
+  nextRunAt: string;
+  lastRunAt: string | null;
+  config: ScheduleConfig;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ScheduleRunRecord = {
+  id: string;
+  scheduleId: string;
+  boardId: string;
+  runCardId: string | null;
+  jobId: string | null;
+  status: "queued" | "running" | "done" | "failed";
+  trigger: "due" | "manual";
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  createdAt: string;
+  /** Joined for UI convenience. */
+  runCardTitle?: string | null;
+  scheduleName?: string | null;
+};
+
+export type JobTrigger =
+  | "mention"
+  | "poll"
+  | "settle"
+  | "deep_dive"
+  | "schedule";
+
 const JOB_PROGRESS_MAX = 500;
 const CLAIM_PROGRESS = "已认领，准备执行";
 
@@ -99,6 +152,7 @@ const DEFAULT_EMPLOYEES: Array<{
   { role: "test", displayName: "Test Bot", watchColumns: ["test"] },
   { role: "review", displayName: "Review Bot", watchColumns: ["accept"] },
   { role: "ba", displayName: "BA Bot", watchColumns: ["requirements"] },
+  { role: "scanner", displayName: "Scanner Bot", watchColumns: [] },
 ];
 
 export class BoardRepo {
@@ -634,7 +688,7 @@ export class BoardRepo {
     boardId: string;
     cardId: string;
     employeeId: string;
-    trigger: "mention" | "poll" | "settle" | "deep_dive";
+    trigger: JobTrigger;
     payload?: string | null;
   }): JobRecord {
     const id = randomUUID();
@@ -772,6 +826,7 @@ export class BoardRepo {
           `UPDATE cards SET locked_job_id=?, locked_at=?, updated_at=? WHERE id=?`,
         )
         .run(jobId, now, now, job.card_id);
+      this.updateScheduleRunByJobId(jobId, { status: "running" });
       return this.getJob(jobId);
     });
     return claim();
@@ -805,6 +860,7 @@ export class BoardRepo {
         author: emp?.displayName ?? "bot",
         body: input.summary,
       });
+      this.updateScheduleRunByJobId(jobId, { status: "done" });
       return this.getJob(jobId);
     });
     return finish();
@@ -833,6 +889,29 @@ export class BoardRepo {
         author: emp?.displayName ?? "bot",
         body: message,
       });
+      this.updateScheduleRunByJobId(jobId, { status: "failed", error: message });
+      // Schedule failure: retry on next cron tick after 1h (or sooner if cron fires earlier).
+      if (job.trigger === "schedule" && job.payload) {
+        try {
+          const parsed = JSON.parse(job.payload) as { scheduleId?: string };
+          if (parsed.scheduleId) {
+            const sched = this.getSchedule(parsed.scheduleId);
+            if (sched) {
+              const retryFloor = new Date(Date.now() + 3600_000).toISOString();
+              let next: string;
+              try {
+                next = nextCronRunAt(sched.cron, new Date());
+              } catch {
+                next = retryFloor;
+              }
+              if (next < retryFloor) next = retryFloor;
+              this.updateSchedule(parsed.scheduleId, { nextRunAt: next });
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       return this.getJob(jobId);
     });
     return finish();
@@ -912,5 +991,464 @@ export class BoardRepo {
          FROM jobs WHERE board_id = ? AND status = 'open' ORDER BY created_at`,
       )
       .all(boardId);
+  }
+
+  ensureScannerEmployee(boardId: string): {
+    id: string;
+    boardId: string;
+    role: string;
+    displayName: string;
+    watchColumns: ColumnId[];
+    adapter: string;
+  } {
+    const existing = this.listEmployees(boardId).find((e) => e.role === "scanner");
+    if (existing) return existing;
+    const id = randomUUID();
+    this.db
+      .prepare(
+        `INSERT INTO employees (id, board_id, role, display_name, watch_columns_json, adapter)
+         VALUES (?, ?, 'scanner', 'Scanner Bot', '[]', 'cursor')`,
+      )
+      .run(id, boardId);
+    return this.listEmployees(boardId).find((e) => e.id === id)!;
+  }
+
+  private mapScheduleRow(row: {
+    id: string;
+    boardId: string;
+    name: string;
+    template: string;
+    enabled: number;
+    cron: string | null;
+    intervalHours: number;
+    nextRunAt: string;
+    lastRunAt: string | null;
+    configJson: string;
+    createdAt: string;
+    updatedAt: string;
+  }): ScheduleRecord {
+    let config: ScheduleConfig = {};
+    try {
+      config = JSON.parse(row.configJson || "{}") as ScheduleConfig;
+    } catch {
+      config = {};
+    }
+    const cron =
+      (row.cron && row.cron.trim()) ||
+      cronFromIntervalHours(row.intervalHours || 24);
+    return {
+      id: row.id,
+      boardId: row.boardId,
+      name: row.name,
+      template: row.template,
+      enabled: row.enabled === 1,
+      cron,
+      intervalHours: row.intervalHours || estimateIntervalHoursFromCron(cron),
+      nextRunAt: row.nextRunAt,
+      lastRunAt: row.lastRunAt ?? null,
+      config: {
+        focusHint: config.focusHint ?? "",
+        autoCreateTasks: config.autoCreateTasks !== false,
+        maxDefects:
+          typeof config.maxDefects === "number" && config.maxDefects > 0
+            ? Math.min(50, Math.floor(config.maxDefects))
+            : 10,
+      },
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  private scheduleSelectSql(): string {
+    return `SELECT id, board_id as boardId, name, template, enabled,
+                cron, interval_hours as intervalHours, next_run_at as nextRunAt,
+                last_run_at as lastRunAt, config_json as configJson,
+                created_at as createdAt, updated_at as updatedAt
+         FROM schedules`;
+  }
+
+  getSchedule(id: string): ScheduleRecord | null {
+    const row = this.db
+      .prepare(`${this.scheduleSelectSql()} WHERE id = ?`)
+      .get(id) as
+      | {
+          id: string;
+          boardId: string;
+          name: string;
+          template: string;
+          enabled: number;
+          cron: string | null;
+          intervalHours: number;
+          nextRunAt: string;
+          lastRunAt: string | null;
+          configJson: string;
+          createdAt: string;
+          updatedAt: string;
+        }
+      | undefined;
+    return row ? this.mapScheduleRow(row) : null;
+  }
+
+  listSchedules(boardId: string): ScheduleRecord[] {
+    const rows = this.db
+      .prepare(`${this.scheduleSelectSql()} WHERE board_id = ? ORDER BY created_at`)
+      .all(boardId) as Array<{
+      id: string;
+      boardId: string;
+      name: string;
+      template: string;
+      enabled: number;
+      cron: string | null;
+      intervalHours: number;
+      nextRunAt: string;
+      lastRunAt: string | null;
+      configJson: string;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+    return rows.map((r) => this.mapScheduleRow(r));
+  }
+
+  createSchedule(input: {
+    boardId: string;
+    name: string;
+    template?: string;
+    enabled?: boolean;
+    cron?: string;
+    intervalHours?: number;
+    nextRunAt?: string;
+    config?: ScheduleConfig;
+  }): ScheduleRecord {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const cron = assertValidCron(
+      input.cron?.trim() ||
+        cronFromIntervalHours(input.intervalHours ?? 24),
+    );
+    const intervalHours =
+      input.intervalHours ?? estimateIntervalHoursFromCron(cron);
+    const nextRunAt = input.nextRunAt ?? nextCronRunAt(cron, now);
+    this.db
+      .prepare(
+        `INSERT INTO schedules (
+           id, board_id, name, template, enabled, cron, interval_hours,
+           next_run_at, last_run_at, config_json, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.boardId,
+        input.name,
+        input.template ?? "code_scan",
+        input.enabled === false ? 0 : 1,
+        cron,
+        Math.max(1, intervalHours),
+        nextRunAt,
+        JSON.stringify(input.config ?? {}),
+        now,
+        now,
+      );
+    return this.getSchedule(id)!;
+  }
+
+  updateSchedule(
+    id: string,
+    patch: Partial<{
+      name: string;
+      enabled: boolean;
+      cron: string;
+      intervalHours: number;
+      nextRunAt: string;
+      lastRunAt: string | null;
+      config: ScheduleConfig;
+    }>,
+  ): ScheduleRecord | null {
+    const cur = this.getSchedule(id);
+    if (!cur) return null;
+    const now = new Date().toISOString();
+    const name = patch.name ?? cur.name;
+    const enabled = patch.enabled ?? cur.enabled;
+    let cron = cur.cron;
+    let intervalHours = cur.intervalHours;
+    let nextRunAt = patch.nextRunAt ?? cur.nextRunAt;
+    if (patch.cron !== undefined) {
+      cron = assertValidCron(patch.cron);
+      intervalHours = estimateIntervalHoursFromCron(cron);
+      if (patch.nextRunAt === undefined) {
+        nextRunAt = nextCronRunAt(cron, now);
+      }
+    } else if (patch.intervalHours !== undefined) {
+      intervalHours = Math.max(1, patch.intervalHours);
+      cron = cronFromIntervalHours(intervalHours);
+      if (patch.nextRunAt === undefined) {
+        nextRunAt = nextCronRunAt(cron, now);
+      }
+    }
+    const lastRunAt =
+      patch.lastRunAt !== undefined ? patch.lastRunAt : cur.lastRunAt;
+    const config = patch.config ?? cur.config;
+    this.db
+      .prepare(
+        `UPDATE schedules SET name=?, enabled=?, cron=?, interval_hours=?, next_run_at=?,
+         last_run_at=?, config_json=?, updated_at=? WHERE id=?`,
+      )
+      .run(
+        name,
+        enabled ? 1 : 0,
+        cron,
+        Math.max(1, intervalHours),
+        nextRunAt,
+        lastRunAt,
+        JSON.stringify(config),
+        now,
+        id,
+      );
+    return this.getSchedule(id);
+  }
+
+  deleteSchedule(id: string): boolean {
+    const result = this.db.prepare(`DELETE FROM schedules WHERE id = ?`).run(id);
+    return result.changes > 0;
+  }
+
+  getScheduleRun(id: string): ScheduleRunRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT r.id, r.schedule_id as scheduleId, r.board_id as boardId,
+                r.run_card_id as runCardId, r.job_id as jobId, r.status,
+                r.trigger, r.error, r.started_at as startedAt,
+                r.finished_at as finishedAt, r.created_at as createdAt,
+                c.title as runCardTitle, s.name as scheduleName
+         FROM schedule_runs r
+         LEFT JOIN cards c ON c.id = r.run_card_id
+         LEFT JOIN schedules s ON s.id = r.schedule_id
+         WHERE r.id = ?`,
+      )
+      .get(id) as ScheduleRunRecord | undefined;
+    return row ?? null;
+  }
+
+  listScheduleRuns(
+    boardId: string,
+    opts?: { scheduleId?: string; limit?: number },
+  ): ScheduleRunRecord[] {
+    const limit = Math.min(200, Math.max(1, opts?.limit ?? 50));
+    if (opts?.scheduleId) {
+      return this.db
+        .prepare(
+          `SELECT r.id, r.schedule_id as scheduleId, r.board_id as boardId,
+                  r.run_card_id as runCardId, r.job_id as jobId, r.status,
+                  r.trigger, r.error, r.started_at as startedAt,
+                  r.finished_at as finishedAt, r.created_at as createdAt,
+                  c.title as runCardTitle, s.name as scheduleName
+           FROM schedule_runs r
+           LEFT JOIN cards c ON c.id = r.run_card_id
+           LEFT JOIN schedules s ON s.id = r.schedule_id
+           WHERE r.board_id = ? AND r.schedule_id = ?
+           ORDER BY r.started_at DESC
+           LIMIT ?`,
+        )
+        .all(boardId, opts.scheduleId, limit) as ScheduleRunRecord[];
+    }
+    return this.db
+      .prepare(
+        `SELECT r.id, r.schedule_id as scheduleId, r.board_id as boardId,
+                r.run_card_id as runCardId, r.job_id as jobId, r.status,
+                r.trigger, r.error, r.started_at as startedAt,
+                r.finished_at as finishedAt, r.created_at as createdAt,
+                c.title as runCardTitle, s.name as scheduleName
+         FROM schedule_runs r
+         LEFT JOIN cards c ON c.id = r.run_card_id
+         LEFT JOIN schedules s ON s.id = r.schedule_id
+         WHERE r.board_id = ?
+         ORDER BY r.started_at DESC
+         LIMIT ?`,
+      )
+      .all(boardId, limit) as ScheduleRunRecord[];
+  }
+
+  updateScheduleRunByJobId(
+    jobId: string,
+    patch: { status: "running" | "done" | "failed"; error?: string | null },
+  ): void {
+    const now = new Date().toISOString();
+    if (patch.status === "running") {
+      this.db
+        .prepare(
+          `UPDATE schedule_runs SET status='running' WHERE job_id=? AND status='queued'`,
+        )
+        .run(jobId);
+      return;
+    }
+    this.db
+      .prepare(
+        `UPDATE schedule_runs SET status=?, error=?, finished_at=?
+         WHERE job_id=? AND status IN ('queued','running')`,
+      )
+      .run(patch.status, patch.error ?? null, now, jobId);
+  }
+
+  /**
+   * Create a scan-run design card + schedule job for Scanner Bot.
+   * Advances next_run_at / last_run_at.
+   */
+  enqueueScheduleRun(
+    scheduleId: string,
+    opts?: { force?: boolean; nowIso?: string; trigger?: "due" | "manual" },
+  ): {
+    schedule: ScheduleRecord;
+    runCard: CardRecord;
+    job: JobRecord;
+    run: ScheduleRunRecord;
+  } | null {
+    const schedule = this.getSchedule(scheduleId);
+    if (!schedule) return null;
+    if (!opts?.force && !schedule.enabled) return null;
+
+    const now = opts?.nowIso ?? new Date().toISOString();
+    const trigger = opts?.trigger ?? "due";
+    const scanner = this.ensureScannerEmployee(schedule.boardId);
+    const stamp = now.slice(0, 16).replace("T", " ");
+    const runCard = this.createCard({
+      boardId: schedule.boardId,
+      type: "design",
+      title: `${schedule.name} · ${stamp}`,
+      description: [
+        `schedule_id: ${schedule.id}`,
+        `template: ${schedule.template}`,
+        `cron: ${schedule.cron}`,
+        schedule.config.focusHint
+          ? `focus: ${schedule.config.focusHint}`
+          : "",
+        "",
+        "定时代码扫描运行卡。完成后查看报告制品；缺陷任务卡在待办列（冻结），人工批准解冻后可拖入开发。",
+      ]
+        .filter((l) => l !== undefined)
+        .join("\n"),
+      column: "design",
+      frozen: false,
+    });
+
+    const runId = randomUUID();
+    const payload = JSON.stringify({
+      scheduleId: schedule.id,
+      scheduleRunId: runId,
+      template: schedule.template,
+      config: schedule.config,
+      runCardId: runCard.id,
+    });
+
+    const job = this.createJob({
+      boardId: schedule.boardId,
+      cardId: runCard.id,
+      employeeId: scanner.id,
+      trigger: "schedule",
+      payload,
+    });
+
+    this.db
+      .prepare(
+        `INSERT INTO schedule_runs (
+           id, schedule_id, board_id, run_card_id, job_id, status, trigger,
+           error, started_at, finished_at, created_at
+         ) VALUES (?, ?, ?, ?, ?, 'queued', ?, NULL, ?, NULL, ?)`,
+      )
+      .run(
+        runId,
+        schedule.id,
+        schedule.boardId,
+        runCard.id,
+        job.id,
+        trigger,
+        now,
+        now,
+      );
+
+    this.addComment({
+      cardId: runCard.id,
+      author: "bot",
+      body: `[audit] schedule ${schedule.id} (${schedule.name}) enqueued job ${job.id}`,
+    });
+
+    let next: string;
+    try {
+      next = nextCronRunAt(schedule.cron, now);
+    } catch {
+      next = new Date(
+        new Date(now).getTime() + schedule.intervalHours * 3600_000,
+      ).toISOString();
+    }
+    const updated = this.updateSchedule(schedule.id, {
+      lastRunAt: now,
+      nextRunAt: next,
+    })!;
+
+    return {
+      schedule: updated,
+      runCard,
+      job,
+      run: this.getScheduleRun(runId)!,
+    };
+  }
+
+  /** Enqueue all enabled schedules whose next_run_at <= now. */
+  processDueSchedules(
+    boardId: string,
+    nowIso?: string,
+  ): Array<{
+    scheduleId: string;
+    runCardId: string;
+    jobId: string;
+    runId: string;
+  }> {
+    const now = nowIso ?? new Date().toISOString();
+    const due = this.listSchedules(boardId).filter(
+      (s) => s.enabled && s.nextRunAt <= now,
+    );
+    const out: Array<{
+      scheduleId: string;
+      runCardId: string;
+      jobId: string;
+      runId: string;
+    }> = [];
+    for (const s of due) {
+      const r = this.enqueueScheduleRun(s.id, {
+        force: true,
+        nowIso: now,
+        trigger: "due",
+      });
+      if (!r) continue;
+      out.push({
+        scheduleId: s.id,
+        runCardId: r.runCard.id,
+        jobId: r.job.id,
+        runId: r.run.id,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Recent open defect tasks in design for dedupe (title + path fingerprint).
+   */
+  listRecentScanDefectKeys(boardId: string, withinHours = 168): Set<string> {
+    const since = new Date(
+      Date.now() - withinHours * 3600_000,
+    ).toISOString();
+    const rows = this.db
+      .prepare(
+        `SELECT title, description FROM cards
+         WHERE board_id = ? AND type = 'task' AND column_id = 'design'
+           AND created_at >= ?`,
+      )
+      .all(boardId, since) as Array<{ title: string; description: string }>;
+    const keys = new Set<string>();
+    for (const r of rows) {
+      const pathMatch = /(?:^|\n)path:\s*(.+)$/im.exec(r.description);
+      const path = (pathMatch?.[1] ?? "").trim().toLowerCase();
+      const title = r.title.replace(/^\[scan\]\s*/i, "").trim().toLowerCase();
+      keys.add(`${title}|${path}`);
+    }
+    return keys;
   }
 }

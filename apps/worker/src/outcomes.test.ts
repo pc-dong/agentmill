@@ -272,4 +272,54 @@ describe("applyRoleOutcome", () => {
       );
     });
   });
+
+  describe("scanner", () => {
+    it("writes report and creates frozen defect tasks with dedupe", async () => {
+      const fs = await import("node:fs");
+      const os = await import("node:os");
+      const path = await import("node:path");
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-scan-"));
+      const client = fakeClient({
+        listCards: vi.fn(async () => [
+          {
+            id: "old",
+            type: "task",
+            title: "[scan] Dup",
+            description: "path: src/dup.ts\nscan_run: x",
+            column: "design",
+            frozen: true,
+            createdAt: new Date().toISOString(),
+          },
+        ]),
+      });
+      const summary = [
+        "REPORT path docs/scans/t.md",
+        "DEFECT title=Dup severity=med path=src/dup.ts summary=already",
+        "DEFECT title=NewBug severity=high path=src/new.ts summary=fresh",
+        "SUMMARY: 2 findings",
+      ].join("\n");
+      await applyRoleOutcome(
+        "scanner",
+        summary,
+        {
+          ...designCtx,
+          cardTitle: "Nightly",
+          workspacePath: dir,
+          scheduleConfig: { maxDefects: 10, autoCreateTasks: true },
+        },
+        client,
+      );
+      expect(fs.existsSync(path.join(dir, "docs/scans/t.md"))).toBe(true);
+      expect(client.createCard).toHaveBeenCalledTimes(1);
+      expect(client.createCard).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "task",
+          frozen: true,
+          column: "design",
+          title: expect.stringContaining("NewBug"),
+        }),
+      );
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+  });
 });

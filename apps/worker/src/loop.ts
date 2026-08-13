@@ -6,7 +6,18 @@ export async function tick(
   client: BoardClient,
   driver: AgentDriver,
   opts: { createPollJobs: boolean },
-): Promise<{ claimed: number; pollCreated: number }> {
+): Promise<{ claimed: number; pollCreated: number; schedulesEnqueued: number }> {
+  let schedulesEnqueued = 0;
+  try {
+    const due = await client.processDueSchedules();
+    schedulesEnqueued = due.enqueued?.length ?? 0;
+  } catch (e) {
+    console.error(
+      "processDueSchedules failed:",
+      e instanceof Error ? e.message : String(e),
+    );
+  }
+
   let pollCreated = 0;
   if (opts.createPollJobs) {
     const r = await client.createPollJobs();
@@ -43,5 +54,5 @@ export async function tick(
     }
   }
 
-  return { claimed, pollCreated };
+  return { claimed, pollCreated, schedulesEnqueued };
 }

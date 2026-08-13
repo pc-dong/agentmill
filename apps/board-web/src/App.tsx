@@ -3,6 +3,7 @@ import { api, type Card } from "./api";
 import { BoardView } from "./BoardView";
 import { CardDrawer } from "./CardDrawer";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { SchedulesPanel } from "./SchedulesPanel";
 
 const BOARD_KEY = "aiw.boardId";
 
@@ -20,6 +21,7 @@ export function App() {
   const [pendingDelete, setPendingDelete] = useState<Card | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [schedulesOpen, setSchedulesOpen] = useState(false);
 
   const epics = useMemo(
     () => cards.filter((c) => c.type === "epic"),
@@ -193,7 +195,38 @@ export function App() {
         <button type="button" onClick={() => refresh()}>
           刷新
         </button>
+        <button type="button" onClick={() => setSchedulesOpen(true)}>
+          定时任务
+        </button>
       </header>
+      <SchedulesPanel
+        boardId={boardId}
+        open={schedulesOpen}
+        onClose={() => setSchedulesOpen(false)}
+        onRan={() => {
+          armJobWatch();
+          void refresh();
+        }}
+        onOpenCard={(cardId) => {
+          const card = cards.find((c) => c.id === cardId);
+          if (card) {
+            setSelected(card);
+            setSchedulesOpen(false);
+          } else {
+            void refresh().then(() => {
+              /* selection after refresh */
+            });
+            api.listCards(boardId).then((list) => {
+              setCards(list);
+              const c = list.find((x) => x.id === cardId);
+              if (c) {
+                setSelected(c);
+                setSchedulesOpen(false);
+              }
+            });
+          }
+        }}
+      />
       <BoardView
         cards={cards}
         onOpen={setSelected}

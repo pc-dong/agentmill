@@ -59,6 +59,18 @@ export const ROLE_PROMPTS: Record<string, string> = {
     "Still end with the same EPIC_MODE / EPIC_* / PRD_* / ARTIFACT protocol lines as plain text (no code fence).",
     "Do not change kanban columns.",
   ].join(" "),
+  scanner: [
+    "You are Scanner Bot running a scheduled code-defect scan of this local workspace.",
+    "Inspect the codebase for likely bugs, security issues, broken contracts, missing tests, or risky patterns.",
+    "Write a markdown report under docs/scans/ (create the directory if needed).",
+    "HARD RULES: do NOT git push; do NOT open remote PRs; local files only.",
+    "End with plain protocol lines (no code fence):",
+    "REPORT path docs/scans/<run-id-or-date>.md",
+    "DEFECT title=<short title> severity=low|med|high path=<relpath> summary=<one line>",
+    "(one DEFECT line per issue; omit DEFECT lines if none found)",
+    "SUMMARY: <one-line overall result>",
+    "Also emit ARTIFACT file <report-path> Scan report",
+  ].join(" "),
 };
 
 export function buildPrompt(role: string, card: {
@@ -87,6 +99,7 @@ export function buildPrompt(role: string, card: {
       "TASK <title> | <description> [| plan:<relpath>]",
       "VERIFY pass | VERIFY fail",
       "TEST pass | TEST fail",
+      "REPORT path <relpath>  /  DEFECT title=… severity=… path=… summary=…  (scanner)",
     );
   }
   return lines.join("\n");

@@ -610,6 +610,53 @@ export function CardDrawer(props: {
       <button type="button" onClick={saveEdits}>
         保存修改
       </button>
+      {props.card.type === "task" &&
+        props.card.frozen &&
+        props.card.column === "design" &&
+        /scan_run:\s*\S+/i.test(props.card.description) && (
+          <div className="design-pipeline">
+            <p className="meta">
+              扫描缺陷卡（已冻结）。批准解冻后可拖到「开发」由 Dev Bot 执行。
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                setError(null);
+                try {
+                  await api.updateCard(props.card.id, { frozen: false });
+                  props.onChanged();
+                } catch (e) {
+                  setError(String(e));
+                }
+              }}
+            >
+              批准（解冻）
+            </button>
+          </div>
+        )}
+      {props.card.type === "design" &&
+        /schedule_id:\s*\S+/i.test(props.card.description) && (
+          <div className="design-pipeline">
+            <p className="meta">
+              扫描运行卡。可将本轮产出的冻结缺陷卡一并批准解冻。
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                setError(null);
+                try {
+                  const r = await api.approveScanDefects(props.card.id);
+                  props.onChanged();
+                  window.alert(`已批准 ${r.approved} 张缺陷卡`);
+                } catch (e) {
+                  setError(String(e));
+                }
+              }}
+            >
+              批准本轮全部缺陷卡
+            </button>
+          </div>
+        )}
       {error && <p style={{ color: "#b91c1c" }}>{error}</p>}
 
       {props.card.type === "design" && linkedRequirements.length > 0 && (

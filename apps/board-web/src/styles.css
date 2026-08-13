@@ -957,3 +957,125 @@ body { margin: 0; }
   }
 }
 
+.schedules-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 25, 23, 0.35);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  z-index: 40;
+  overflow: auto;
+}
+.schedules-panel {
+  width: min(560px, 100%);
+  background: #fff;
+  border: 1px solid #d6d3d1;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 12px 40px rgba(28, 25, 23, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.schedules-panel-wide {
+  width: min(760px, 100%);
+}
+.schedules-header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.schedules-history {
+  border-top: 1px solid #e7e5e4;
+  padding-top: 12px;
+}
+.schedules-history h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.schedules-runs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.schedules-runs-table th,
+.schedules-runs-table td {
+  text-align: left;
+  padding: 6px 4px;
+  border-bottom: 1px solid #e7e5e4;
+  vertical-align: top;
+}
+.schedules-runs-table code,
+.schedules-item code {
+  font-size: 11px;
+  background: #f5f5f4;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.run-status {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+.run-status-queued { background: #e7e5e4; color: #44403c; }
+.run-status-running { background: #fef3c7; color: #92400e; }
+.run-status-done { background: #d1fae5; color: #065f46; }
+.run-status-failed { background: #fee2e2; color: #991b1b; }
+.schedules-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.schedules-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.schedules-create,
+.schedules-list {
+  border-top: 1px solid #e7e5e4;
+  padding-top: 12px;
+}
+.schedules-create h3,
+.schedules-list h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.schedules-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.schedules-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  background: #fafaf9;
+}
+.schedules-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.schedules-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+.dangerish {
+  color: #b91c1c;
+}
+

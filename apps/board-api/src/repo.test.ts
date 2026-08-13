@@ -849,4 +849,79 @@ describe("BoardRepo", () => {
     expect(repo.getCard(inflight.id)!.frozen).toBe(false);
     expect(repo.getCard(inflight.id)!.column).toBe("dev");
   });
+
+  it("seeds scanner employee and enqueues schedule runs", () => {
+    const { repo } = tempDb();
+    const board = repo.createBoard({ name: "b", workspacePath: "/tmp/x" });
+    expect(repo.listEmployees(board.id).some((e) => e.role === "scanner")).toBe(
+      true,
+    );
+
+    const schedule = repo.createSchedule({
+      boardId: board.id,
+      name: "Nightly scan",
+      cron: "0 9 * * *",
+      nextRunAt: new Date(Date.now() - 60_000).toISOString(),
+      config: { focusHint: "auth", maxDefects: 5 },
+    });
+    expect(schedule.enabled).toBe(true);
+    expect(schedule.cron).toBe("0 9 * * *");
+
+    const due = repo.processDueSchedules(board.id);
+    expect(due).toHaveLength(1);
+    const run = repo.getCard(due[0]!.runCardId)!;
+    expect(run.type).toBe("design");
+    expect(run.description).toContain(`schedule_id: ${schedule.id}`);
+    const job = repo.getJob(due[0]!.jobId)!;
+    expect(job.trigger).toBe("schedule");
+    expect(job.status).toBe("open");
+    const runRec = repo.getScheduleRun(due[0]!.runId)!;
+    expect(runRec.status).toBe("queued");
+    expect(runRec.trigger).toBe("due");
+
+    const after = repo.getSchedule(schedule.id)!;
+    expect(after.lastRunAt).toBeTruthy();
+    expect(after.nextRunAt > after.lastRunAt!).toBe(true);
+
+    const history = repo.listScheduleRuns(board.id, { scheduleId: schedule.id });
+    expect(history).toHaveLength(1);
+  });
+
+  it("schedule failJob sets retry backoff and run failed", () => {
+    const { repo } = tempDb();
+    const board = repo.createBoard({ name: "b", workspacePath: "/tmp/x" });
+    const schedule = repo.createSchedule({
+      boardId: board.id,
+      name: "S",
+      cron: "0 * * * *",
+      nextRunAt: new Date(Date.now() - 1000).toISOString(),
+    });
+    const enq = repo.enqueueScheduleRun(schedule.id, {
+      force: true,
+      trigger: "manual",
+    })!;
+    const claimed = repo.claimJob(enq.job.id, "w1")!;
+    expect(claimed.status).toBe("claimed");
+    expect(repo.getScheduleRun(enq.run.id)!.status).toBe("running");
+    const beforeFail = Date.now();
+    repo.failJob(enq.job.id, "boom");
+    expect(repo.getScheduleRun(enq.run.id)!.status).toBe("failed");
+    const next = new Date(repo.getSchedule(schedule.id)!.nextRunAt).getTime();
+    expect(next).toBeGreaterThanOrEqual(beforeFail + 3500_000);
+  });
+
+  it("listRecentScanDefectKeys fingerprints title+path", () => {
+    const { repo } = tempDb();
+    const board = repo.createBoard({ name: "b", workspacePath: "/tmp/x" });
+    repo.createCard({
+      boardId: board.id,
+      type: "task",
+      title: "Null deref",
+      description: "x\npath: src/a.ts\nscan_run: abc",
+      column: "design",
+      frozen: true,
+    });
+    const keys = repo.listRecentScanDefectKeys(board.id);
+    expect(keys.has("null deref|src/a.ts")).toBe(true);
+  });
 });

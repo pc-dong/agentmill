@@ -235,6 +235,12 @@ export class BoardClient {
     return this.postJson(`/boards/${this.opts.boardId}/poll-jobs`, {});
   }
 
+  async processDueSchedules(): Promise<{
+    enqueued: Array<{ scheduleId: string; runCardId: string; jobId: string }>;
+  }> {
+    return this.postJson(`/boards/${this.opts.boardId}/schedules/due`, {});
+  }
+
   async listSessionMessages(sessionId: string): Promise<SessionMessage[]> {
     return this.getJson<SessionMessage[]>(`/sessions/${sessionId}/messages`);
   }

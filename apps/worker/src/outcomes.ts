@@ -1,4 +1,12 @@
-import { parseArtifactHints, parseOutcome } from "@ai-workforce/agent";
+import {
+  buildScanReportMarkdown,
+  defectDedupeKey,
+  parseArtifactHints,
+  parseOutcome,
+  parseScanOutcome,
+} from "@ai-workforce/agent";
+import path from "node:path";
+import { defaultScanReportPath, writeScanReportFile } from "./scanWrite.js";
 
 export type OutcomeContext = {
   cardId: string;
@@ -6,6 +14,14 @@ export type OutcomeContext = {
   cardColumn: string;
   epicId: string | null;
   artifacts: Array<{ kind: string; href: string; label?: string }>;
+  boardId?: string;
+  cardTitle?: string;
+  workspacePath?: string;
+  scheduleConfig?: {
+    focusHint?: string;
+    autoCreateTasks?: boolean;
+    maxDefects?: number;
+  };
 };
 
 export type OutcomeBoardClient = {
@@ -36,9 +52,12 @@ export type OutcomeBoardClient = {
     Array<{
       id: string;
       type: string;
+      title?: string;
+      description?: string;
       designId?: string | null;
       column: string;
       frozen: boolean;
+      createdAt?: string;
     }>
   >;
   postTestResult(cardId: string, passed: boolean): Promise<unknown>;
@@ -225,5 +244,122 @@ export async function applyRoleOutcome(
     case "review":
       await client.postComment(ctx.cardId, "bot", "Review complete");
       return;
+
+    case "scanner": {
+      const scan = parseScanOutcome(summary);
+      const maxDefects = ctx.scheduleConfig?.maxDefects ?? 10;
+      const autoCreate = ctx.scheduleConfig?.autoCreateTasks !== false;
+      const defects = scan.defects.slice(0, maxDefects);
+      const reportPath =
+        scan.reportPath?.replace(/^\/+/, "") ||
+        defaultScanReportPath(ctx.cardId);
+
+      if (ctx.workspacePath) {
+        const md = buildScanReportMarkdown({
+          runTitle: ctx.cardTitle ?? "Code scan",
+          focusHint: ctx.scheduleConfig?.focusHint,
+          summaryLine: scan.summaryLine,
+          defects,
+        });
+        try {
+          writeScanReportFile({
+            workspacePath: ctx.workspacePath,
+            relPath: reportPath.startsWith("docs/scans/")
+              ? reportPath
+              : `docs/scans/${reportPath.split("/").pop()}`,
+            markdown: md,
+          });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          await client.postComment(
+            ctx.cardId,
+            "bot",
+            `Warning: could not write scan report: ${message}`,
+          );
+        }
+      }
+
+      const reportRel = reportPath.startsWith("docs/scans/")
+        ? reportPath
+        : `docs/scans/${path.basename(reportPath)}`;
+      const reportArtifact = {
+        kind: "file" as const,
+        href: reportRel,
+        label: "Scan report",
+      };
+      if (client.updateCard) {
+        await client.updateCard(ctx.cardId, {
+          artifacts: [...ctx.artifacts, reportArtifact],
+        });
+      }
+
+      let created = 0;
+      let skipped = 0;
+      if (autoCreate && defects.length > 0) {
+        const existingKeys = new Set<string>();
+        if (client.listCards) {
+          const cards = await client.listCards();
+          const weekAgo = Date.now() - 168 * 3600_000;
+          for (const t of cards) {
+            if (t.type !== "task" || t.column !== "design") continue;
+            const createdAt = t.createdAt
+              ? new Date(t.createdAt).getTime()
+              : 0;
+            if (createdAt && createdAt < weekAgo) continue;
+            const pathMatch = /(?:^|\n)path:\s*(.+)$/im.exec(
+              t.description ?? "",
+            );
+            existingKeys.add(
+              defectDedupeKey({
+                title: (t.title ?? "").replace(/^\[scan\]\s*/i, ""),
+                path: (pathMatch?.[1] ?? "").trim(),
+              }),
+            );
+          }
+        }
+        for (const d of defects) {
+          const key = defectDedupeKey(d);
+          if (existingKeys.has(key)) {
+            skipped++;
+            continue;
+          }
+          existingKeys.add(key);
+          const desc = [
+            d.summary || d.title,
+            `severity: ${d.severity}`,
+            d.path ? `path: ${d.path}` : "",
+            `scan_run: ${ctx.cardId}`,
+            `report: ${reportRel}`,
+          ]
+            .filter(Boolean)
+            .join("\n");
+          await client.createCard({
+            type: "task",
+            title: `[scan] ${d.title}`.slice(0, 120),
+            description: desc,
+            column: "design",
+            epicId: null,
+            designId: null,
+            frozen: true,
+            artifacts: [reportArtifact],
+          });
+          created++;
+        }
+      }
+
+      await client.postComment(
+        ctx.cardId,
+        "bot",
+        [
+          scan.summaryLine
+            ? `Scan SUMMARY: ${scan.summaryLine}`
+            : "Scan complete",
+          `Report: ${reportRel}`,
+          `Defects reported: ${scan.defects.length}; created: ${created}; deduped: ${skipped}`,
+          "缺陷卡已冻结在待办列；人工批准解冻后可拖入开发由 Dev Bot 执行。",
+        ].join("\n"),
+      );
+      return;
+    }
   }
 }

@@ -145,6 +145,29 @@ export async function executeClaimedJob(
       );
       prompt = enrichSplitPrompt(prompt, siblings);
     }
+    if (trigger === "schedule" && employee.role === "scanner") {
+      let focus = "";
+      let maxDefects = 10;
+      try {
+        const p = JSON.parse(job.payload ?? "{}") as {
+          config?: { focusHint?: string; maxDefects?: number };
+          scheduleId?: string;
+        };
+        focus = p.config?.focusHint?.trim() ?? "";
+        if (typeof p.config?.maxDefects === "number") {
+          maxDefects = p.config.maxDefects;
+        }
+      } catch {
+        /* ignore */
+      }
+      prompt = [
+        prompt,
+        "",
+        `Preferred report path: docs/scans/${new Date().toISOString().slice(0, 10)}-${card.id.slice(0, 8)}.md`,
+        `Max DEFECT lines: ${maxDefects}`,
+        focus ? `Scan focus / scope hint:\n${focus}` : "Scan the whole workspace for likely defects.",
+      ].join("\n");
+    }
     if (trigger === "deep_dive" && job.payload?.trim()) {
       prompt = `${prompt}\n\n## Deep-dive context\n${job.payload.trim()}`;
     }
@@ -205,6 +228,26 @@ export async function executeClaimedJob(
         cardColumn: card.column,
         epicId: card.epicId,
         artifacts,
+        boardId: job.boardId,
+        cardTitle: card.title,
+        workspacePath: board.workspacePath,
+        scheduleConfig:
+          trigger === "schedule" && job.payload
+            ? (() => {
+                try {
+                  const p = JSON.parse(job.payload) as {
+                    config?: {
+                      focusHint?: string;
+                      autoCreateTasks?: boolean;
+                      maxDefects?: number;
+                    };
+                  };
+                  return p.config;
+                } catch {
+                  return undefined;
+                }
+              })()
+            : undefined,
       },
       client,
     );
