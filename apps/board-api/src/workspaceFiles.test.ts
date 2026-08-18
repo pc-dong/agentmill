@@ -6,6 +6,7 @@ import {
   inferEpicDocsRoot,
   listWorkspaceTree,
   readWorkspaceFile,
+  readWorkspaceRaw,
   resolveUnderWorkspace,
 } from "./workspaceFiles.js";
 
@@ -133,5 +134,18 @@ describe("workspaceFiles", () => {
     const ws = tempWs();
     expect(readWorkspaceFile(ws, "../outside.java").ok).toBe(false);
     expect(resolveUnderWorkspace(ws, "../outside.java").ok).toBe(false);
+  });
+
+  it("rejects raw path escape with 400", () => {
+    const ws = tempWs();
+    for (const rel of [
+      "../outside.html",
+      "/etc/passwd",
+      "docs/../../etc/passwd",
+    ]) {
+      const res = readWorkspaceRaw(ws, rel);
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.status).toBe(400);
+    }
   });
 });
