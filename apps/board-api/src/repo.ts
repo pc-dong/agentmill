@@ -990,7 +990,16 @@ export class BoardRepo {
                 status, trigger, created_at as createdAt, claimed_at as claimedAt
          FROM jobs WHERE board_id = ? AND status = 'open' ORDER BY created_at`,
       )
-      .all(boardId);
+      .all(boardId) as Array<{
+      id: string;
+      boardId: string;
+      cardId: string;
+      employeeId: string;
+      status: string;
+      trigger: JobTrigger;
+      createdAt: string;
+      claimedAt: string | null;
+    }>;
   }
 
   ensureScannerEmployee(boardId: string): {

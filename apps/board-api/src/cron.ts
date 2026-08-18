@@ -21,7 +21,7 @@ export function nextCronRunAt(
   const expr = CronExpressionParser.parse(assertValidCron(cron), {
     currentDate,
   });
-  return expr.next().toISOString();
+  return expr.next().toDate().toISOString();
 }
 
 /** Approximate cron from legacy interval hours (best-effort). */
