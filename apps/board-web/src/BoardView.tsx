@@ -342,6 +342,12 @@ export function BoardView(props: {
                     </div>
                   );
                 })}
+              {cardsForColumn(props.cards, col.id, columnQueries).length ===
+                0 && (
+                <div className="column-empty" aria-hidden>
+                  暂无卡片
+                </div>
+              )}
             </section>
           );
         })}

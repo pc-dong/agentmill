@@ -22,7 +22,7 @@ function readBoardId(): string | null {
 }
 
 function writeBoardId(id: string) {
-  writeBoardId(id);
+  localStorage.setItem(BOARD_KEY, id);
   localStorage.removeItem(LEGACY_BOARD_KEY);
 }
 
