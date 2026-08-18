@@ -1,4 +1,4 @@
-import { CursorDriver, MockDriver } from "@ai-workforce/agent";
+import { CursorDriver, DshDriver, MockDriver } from "@ai-workforce/agent";
 import { loadConfig, type WorkerConfig } from "./config.js";
 import { BoardClient } from "./boardClient.js";
 import { tick } from "./loop.js";
@@ -12,6 +12,20 @@ function createDriver(config: WorkerConfig) {
     return new CursorDriver({
       apiKey: config.cursorApiKey,
       modelId: config.modelId,
+    });
+  }
+  if (config.driver === "dsh") {
+    if (!config.dshApiKey) {
+      throw new Error(
+        "AIW_DSH_API_KEY (or DEEPSEEK_API_KEY) required when AIW_DRIVER=dsh",
+      );
+    }
+    return new DshDriver({
+      dshBin: config.dshBin,
+      modelId: config.modelId,
+      apiKey: config.dshApiKey,
+      baseURL: config.dshBaseURL,
+      timeoutMs: config.dshTimeoutMs,
     });
   }
   return new MockDriver();

@@ -53,7 +53,10 @@ function localAgentOptions(workspacePath: string) {
   };
 }
 
-function withWorkspaceBoundary(prompt: string, workspaceRoot: string): string {
+export function withWorkspaceBoundary(
+  prompt: string,
+  workspaceRoot: string,
+): string {
   return [
     WORKSPACE_BOUNDARY_RULES,
     `Workspace root (absolute): ${workspaceRoot}`,

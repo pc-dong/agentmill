@@ -7,4 +7,5 @@ export * from "./parseScanOutcome.js";
 export * from "./workspacePath.js";
 export * from "./mock.js";
 export * from "./cursor.js";
+export * from "./dsh.js";
 export * from "./prompts.js";

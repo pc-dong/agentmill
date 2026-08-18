@@ -2,6 +2,8 @@ import os from "node:os";
 
 export const ALL_BOARDS = "*";
 
+export type WorkerDriver = "mock" | "cursor" | "dsh";
+
 export type WorkerConfig = {
   apiBase: string;
   /**
@@ -10,11 +12,22 @@ export type WorkerConfig = {
    */
   boardIds: string[];
   workerId: string;
-  driver: "mock" | "cursor";
+  driver: WorkerDriver;
   pollIntervalMs: number;
   cursorApiKey?: string;
+  /** Per-driver default: cursor → composer-2.5, dsh → deepseek-v4-flash. */
   modelId: string;
+  /** dsh executable override (AIW_DSH_BIN); defaults to "dsh" on PATH. */
+  dshBin?: string;
+  /** DeepSeek API key; AIW_DSH_API_KEY wins, then DEEPSEEK_API_KEY. */
+  dshApiKey?: string;
+  /** Optional DeepSeek base URL override. */
+  dshBaseURL?: string;
+  /** dsh run timeout ms; 0 disables. Defaults to 30 minutes. */
+  dshTimeoutMs: number;
 };
+
+const DSH_DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 
 function parseBoardIds(env: NodeJS.ProcessEnv): string[] {
   const ids = new Set<string>();
@@ -30,22 +43,35 @@ function parseBoardIds(env: NodeJS.ProcessEnv): string[] {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv): WorkerConfig {
-  const driver = env.AIW_DRIVER;
-  if (driver && driver !== "mock" && driver !== "cursor") {
-    throw new Error(`Invalid AIW_DRIVER: ${driver}`);
+  const driverRaw = env.AIW_DRIVER;
+  const drivers: WorkerDriver[] = ["mock", "cursor", "dsh"];
+  const driver = (driverRaw ?? "mock") as WorkerDriver;
+  if (!drivers.includes(driver)) {
+    throw new Error(`Invalid AIW_DRIVER: ${driverRaw}`);
   }
 
   const pollIntervalMs = env.AIW_POLL_INTERVAL_MS
     ? Number(env.AIW_POLL_INTERVAL_MS)
     : 5000;
 
+  const defaultModel =
+    driver === "dsh" ? "deepseek-v4-flash" : "composer-2.5";
+
+  const dshTimeoutRaw = env.AIW_DSH_TIMEOUT_MS
+    ? Number(env.AIW_DSH_TIMEOUT_MS)
+    : DSH_DEFAULT_TIMEOUT_MS;
+
   return {
     apiBase: env.AIW_API_BASE ?? "http://127.0.0.1:8787",
     boardIds: parseBoardIds(env),
     workerId: env.AIW_WORKER_ID ?? `${os.hostname()}-${process.pid}`,
-    driver: (driver as "mock" | "cursor" | undefined) ?? "mock",
+    driver,
     pollIntervalMs,
     cursorApiKey: env.CURSOR_API_KEY,
-    modelId: env.AIW_MODEL_ID ?? "composer-2.5",
+    modelId: env.AIW_MODEL_ID ?? defaultModel,
+    dshBin: env.AIW_DSH_BIN,
+    dshApiKey: env.AIW_DSH_API_KEY ?? env.DEEPSEEK_API_KEY,
+    dshBaseURL: env.AIW_DSH_BASE_URL,
+    dshTimeoutMs: dshTimeoutRaw,
   };
 }

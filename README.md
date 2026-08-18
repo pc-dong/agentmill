@@ -26,8 +26,9 @@ pnpm --filter @ai-workforce/board-api test
 
 ```bash
 # Default: serve ALL boards/workspaces (auto-discovered each tick)
-export AIW_DRIVER=mock          # or cursor
+export AIW_DRIVER=mock          # or cursor, or dsh
 export CURSOR_API_KEY=...       # required for cursor
+export AIW_DSH_API_KEY=...      # required for dsh (falls back to DEEPSEEK_API_KEY)
 
 # Optional: restrict to specific boards (comma-separated)
 # export AIW_BOARD_IDS=<board-id-1>,<board-id-2>
@@ -38,6 +39,23 @@ pnpm dev:worker
 ```
 
 **Multi-workspace:** one worker process serves every board, each board bound to its own workspace directory. Workspace access is isolated per card: jobs resolve the workspace from the board that owns the card (never from worker config), Cursor runs with `cwd` = that workspace, and split/scanner-created cards always land on the job's own board. WS session chats are routed by the session's `boardId`.
+
+**DeepSeek Harness driver** (`AIW_DRIVER=dsh`): spawns `dsh --profile headless "<prompt>"` with `cwd` = the card's workspace; stdout becomes the bot summary, exit code non-zero fails the job.
+
+```bash
+export AIW_DRIVER=dsh
+export AIW_DSH_API_KEY=sk-...        # or DEEPSEEK_API_KEY
+# optional:
+# export AIW_DSH_BIN=/path/to/dsh    # default "dsh" from PATH
+# export AIW_MODEL_ID=deepseek-v4-pro  # any DeepSeek model id passes through
+# export AIW_MODEL_ID=openai/gpt-5     # or "provider/model" for other pi-ai routes
+# export AIW_DSH_TIMEOUT_MS=1800000   # run timeout; 0 disables
+# export AIW_DSH_BASE_URL=...         # override DeepSeek API base
+```
+
+Model selection: a plain `AIW_MODEL_ID` rides the `deepseek-official` route (ids pass through to the DeepSeek API, e.g. `deepseek-v4-flash` default or `deepseek-v4-pro`); `provider/model` (e.g. `openai/gpt-5`, `anthropic/claude-sonnet-4-5`) switches the mounted pi-ai provider route — configure that provider's credentials in `$DSH_HOME/settings.yaml` (the dsh web Models page) or a profile patch.
+
+Note: headless prints the final assistant message only at completion, so sidebar chats return the whole reply at once instead of streaming token-by-token.
 
 Poll creates one job per (card, employee) pair. It does not re-queue cards that already have any job for that employee (open, claimed, done, or failed). Use `@Design Bot` (or other role bots) in a comment to re-run work on a card.
 
