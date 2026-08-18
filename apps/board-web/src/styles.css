@@ -32,6 +32,18 @@ body { margin: 0; }
   border-radius: 8px;
   padding: 8px;
   min-height: 70vh;
+  max-height: calc(100vh - 172px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Sticky column header: title + search stay visible while cards scroll. */
+.column-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #e7e5e4;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
 }
 .column-empty {
   padding: 24px 8px;

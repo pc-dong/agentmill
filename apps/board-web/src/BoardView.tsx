@@ -10,7 +10,7 @@ const COLUMNS: Array<{ id: string; label: string }> = [
   { id: "dev", label: "开发" },
   { id: "test", label: "测试" },
   { id: "accept", label: "验收" },
-  { id: "done", label: "Done" },
+  { id: "done", label: "完成" },
 ];
 
 const OCCUPANCY: Record<Card["type"], readonly string[]> = {
@@ -156,29 +156,31 @@ export function BoardView(props: {
                 void handleDrop(col.id);
               }}
             >
-              <h3>{col.label}</h3>
-              {col.id === "requirements" && (
-                <input
-                  className="column-search"
-                  type="search"
-                  placeholder="搜索需求 / Epic…"
-                  value={reqQuery}
-                  onChange={(e) => setReqQuery(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label="搜索需求列"
-                />
-              )}
-              {col.id === "done" && (
-                <input
-                  className="column-search"
-                  type="search"
-                  placeholder="搜索 Done…"
-                  value={doneQuery}
-                  onChange={(e) => setDoneQuery(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label="搜索 Done 列"
-                />
-              )}
+              <div className="column-head">
+                <h3>{col.label}</h3>
+                {col.id === "requirements" && (
+                  <input
+                    className="column-search"
+                    type="search"
+                    placeholder="搜索需求 / Epic…"
+                    value={reqQuery}
+                    onChange={(e) => setReqQuery(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="搜索需求列"
+                  />
+                )}
+                {col.id === "done" && (
+                  <input
+                    className="column-search"
+                    type="search"
+                    placeholder="搜索完成列…"
+                    value={doneQuery}
+                    onChange={(e) => setDoneQuery(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="搜索完成列"
+                  />
+                )}
+              </div>
               {cardsForColumn(props.cards, col.id, columnQueries).map((c) => {
                   const linked = epicTitle(c.epicId);
                   const canDrag = c.type !== "epic";
