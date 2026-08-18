@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { assertUnderWorkspace } from "@ai-workforce/agent";
+import { assertUnderWorkspace } from "@agentmill/agent";
 
 /** Ensure docs/scans exists and write report markdown if missing or overwrite. */
 export function writeScanReportFile(input: {

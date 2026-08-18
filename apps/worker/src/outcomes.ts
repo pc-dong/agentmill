@@ -4,7 +4,7 @@ import {
   parseArtifactHints,
   parseOutcome,
   parseScanOutcome,
-} from "@ai-workforce/agent";
+} from "@agentmill/agent";
 import path from "node:path";
 import { defaultScanReportPath, writeScanReportFile } from "./scanWrite.js";
 

@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Prefer dedicated port so a stale :8787 (other worktrees) does not mask plan4 routes.
 PORT="${PORT:-8797}"
 API="${API:-http://127.0.0.1:$PORT}"
-export AIW_DATA_DIR="${AIW_DATA_DIR:-$(mktemp -d)}"
+export AM_DATA_DIR="${AM_DATA_DIR:-$(mktemp -d)}"
 WS="$(mktemp -d)"
 API_PID=""
 STARTED_API=false
@@ -39,9 +39,9 @@ if [[ "$(api_code)" == "000" ]] || ! has_ba_jobs; then
     API="http://127.0.0.1:$PORT"
     echo "Existing API lacks ba-jobs; starting worktree API on $API"
   else
-    echo "Starting board-api with AIW_DATA_DIR=$AIW_DATA_DIR PORT=$PORT"
+    echo "Starting board-api with AM_DATA_DIR=$AM_DATA_DIR PORT=$PORT"
   fi
-  (cd "$ROOT" && AIW_DATA_DIR="$AIW_DATA_DIR" PORT="$PORT" pnpm dev:api) &
+  (cd "$ROOT" && AM_DATA_DIR="$AM_DATA_DIR" PORT="$PORT" pnpm dev:api) &
   API_PID=$!
   STARTED_API=true
   for _ in $(seq 1 40); do
@@ -77,11 +77,11 @@ with urllib.request.urlopen(req) as r:
     print(r.read().decode())
 PY
 
-export AIW_BOARD_ID="$BOARD_ID"
-export AIW_API_BASE="$API"
-export AIW_DRIVER=mock
-pnpm --filter @ai-workforce/agent build
-pnpm --filter @ai-workforce/worker exec tsx src/once.ts
+export AM_BOARD_ID="$BOARD_ID"
+export AM_API_BASE="$API"
+export AM_DRIVER=mock
+pnpm --filter @agentmill/agent build
+pnpm --filter @agentmill/worker exec tsx src/once.ts
 
 test -f "$WS/docs/epics/E-DEMO-001-login/EPIC.md"
 test -f "$WS/docs/epics/E-DEMO-001-login/shared-context.md"
@@ -121,7 +121,7 @@ with urllib.request.urlopen(req) as r:
     print(r.read().decode())
 PY
 
-pnpm --filter @ai-workforce/worker exec tsx src/once.ts
+pnpm --filter @agentmill/worker exec tsx src/once.ts
 
 test -f "$WS/docs/epics/E-DEMO-001-login/prds/P-001-02-sso.md"
 # link path must not invent a second epic tree

@@ -6,11 +6,11 @@ import {
   epicDirRel,
   prdRel,
   type BaSettleProtocol,
-} from "@ai-workforce/agent";
+} from "@agentmill/agent";
 
 export function resolveBaTemplatesDir(): string {
-  if (process.env.AIW_BA_TEMPLATES) {
-    return process.env.AIW_BA_TEMPLATES;
+  if (process.env.AM_BA_TEMPLATES ?? process.env.AIW_BA_TEMPLATES) {
+    return process.env.AM_BA_TEMPLATES ?? process.env.AIW_BA_TEMPLATES!;
   }
   // apps/worker/src → repo root → packages/agent/templates/ba
   return fileURLToPath(

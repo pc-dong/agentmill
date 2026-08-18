@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MockDriver } from "@ai-workforce/agent";
-import type { AgentDriver } from "@ai-workforce/agent";
+import { MockDriver } from "@agentmill/agent";
+import type { AgentDriver } from "@agentmill/agent";
 import { executeClaimedJob } from "./executor.js";
 import * as outcomes from "./outcomes.js";
 
@@ -300,18 +300,18 @@ describe("executeClaimedJob", () => {
   });
 
   describe("ba settle / deep_dive", () => {
-    const prevTemplates = process.env.AIW_BA_TEMPLATES;
+    const prevTemplates = process.env.AM_BA_TEMPLATES;
     let workspacePath = "";
 
     afterEach(() => {
-      if (prevTemplates === undefined) delete process.env.AIW_BA_TEMPLATES;
-      else process.env.AIW_BA_TEMPLATES = prevTemplates;
+      if (prevTemplates === undefined) delete process.env.AM_BA_TEMPLATES;
+      else process.env.AM_BA_TEMPLATES = prevTemplates;
       vi.restoreAllMocks();
     });
 
     it("settle writes docs, calls baSettle, completes without oneshot", async () => {
       workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-ba-exec-"));
-      process.env.AIW_BA_TEMPLATES = templatesDir;
+      process.env.AM_BA_TEMPLATES = templatesDir;
 
       const baSettle = vi.fn(async () => ({}));
       const completeJob = vi.fn(async () => {});
@@ -519,7 +519,7 @@ describe("executeClaimedJob", () => {
 
     it("settle force-link fails when protocol epicId mismatches linked epic", async () => {
       workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-ba-exec-"));
-      process.env.AIW_BA_TEMPLATES = templatesDir;
+      process.env.AM_BA_TEMPLATES = templatesDir;
 
       const baSettle = vi.fn(async () => ({}));
       const completeJob = vi.fn(async () => {});

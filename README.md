@@ -1,4 +1,4 @@
-# AI Workforce
+# Agentmill
 
 Lightweight kanban for human + AI employee software delivery.
 
@@ -10,7 +10,7 @@ Plan 1 complete (board domain, SQLite API, React kanban). Plan 2 worker availabl
 
 ```bash
 pnpm install
-pnpm --filter @ai-workforce/domain build
+pnpm --filter @agentmill/domain build
 pnpm dev:api   # :8787
 pnpm dev:web   # :5173
 ```
@@ -18,8 +18,8 @@ pnpm dev:web   # :5173
 ### Test
 
 ```bash
-pnpm --filter @ai-workforce/domain test
-pnpm --filter @ai-workforce/board-api test
+pnpm --filter @agentmill/domain test
+pnpm --filter @agentmill/board-api test
 ```
 
 ## Plan 2 — Worker
@@ -34,7 +34,7 @@ export AIW_DSH_API_KEY=...      # required for dsh (falls back to DEEPSEEK_API_K
 # export AIW_BOARD_IDS=<board-id-1>,<board-id-2>
 # export AIW_BOARD_ID=<board-id>     # legacy single-board form, still works
 
-pnpm --filter @ai-workforce/agent build
+pnpm --filter @agentmill/agent build
 pnpm dev:worker
 ```
 
@@ -68,7 +68,7 @@ Design sidebar streams chat over WebSocket; settle writes artifacts. After onesh
 
 ```bash
 export AIW_DRIVER=mock          # or cursor   (worker serves all boards by default)
-pnpm --filter @ai-workforce/agent build
+pnpm --filter @agentmill/agent build
 pnpm dev:worker                 # poll + WS session loop
 ```
 

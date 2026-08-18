@@ -1,4 +1,4 @@
-import type { AgentDriver } from "@ai-workforce/agent";
+import type { AgentDriver } from "@agentmill/agent";
 import { ALL_BOARDS } from "./config.js";
 import type { BoardClient } from "./boardClient.js";
 import { executeClaimedJob } from "./executor.js";

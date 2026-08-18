@@ -9,7 +9,7 @@ import {
   type ColumnId,
   type CardType,
   type HumanDecision,
-} from "@ai-workforce/domain";
+} from "@agentmill/domain";
 import type { BoardRepo } from "./repo.js";
 import type { SessionRepo } from "./sessions.js";
 import { listWorkspaceTree, readWorkspaceFile, readWorkspaceRaw } from "./workspaceFiles.js";

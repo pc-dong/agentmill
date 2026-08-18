@@ -1,4 +1,4 @@
-import type { AgentDriver } from "@ai-workforce/agent";
+import type { AgentDriver } from "@agentmill/agent";
 import type { BoardClient } from "./boardClient.js";
 import type { WsClientOutMsg } from "./wsClient.js";
 

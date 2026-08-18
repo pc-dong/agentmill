@@ -1,5 +1,5 @@
 {
-  "name": "@ai-workforce/board-api",
+  "name": "@agentmill/board-api",
   "version": "0.0.1",
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@ai-workforce/domain": "workspace:*",
+    "@agentmill/domain": "workspace:*",
     "@hono/node-server": "^1.13.8",
     "better-sqlite3": "^11.8.1",
     "cron-parser": "^5.8.1",

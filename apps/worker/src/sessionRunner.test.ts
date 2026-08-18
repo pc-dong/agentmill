@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AgentDriver } from "@ai-workforce/agent";
+import type { AgentDriver } from "@agentmill/agent";
 import { handleSessionUserMessage } from "./sessionRunner.js";
 
 function fakeClient(overrides: {

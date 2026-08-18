@@ -9,7 +9,10 @@ import { createApp } from "./routes.js";
 import { SessionRepo } from "./sessions.js";
 import { WsHub } from "./wsHub.js";
 
-const dataDir = process.env.AIW_DATA_DIR ?? path.join(process.cwd(), ".data");
+const dataDir =
+  process.env.AM_DATA_DIR ??
+  process.env.AIW_DATA_DIR ??
+  path.join(process.cwd(), ".data");
 fs.mkdirSync(dataDir, { recursive: true });
 const dbPath = path.join(dataDir, "board.sqlite");
 const db = openDb(dbPath);

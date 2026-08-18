@@ -1,12 +1,12 @@
 {
-  "name": "ai-workforce",
+  "name": "agentmill",
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "test": "pnpm -r test",
     "build": "pnpm -r build",
-    "dev:api": "pnpm --filter @ai-workforce/board-api dev",
-    "dev:web": "pnpm --filter @ai-workforce/board-web dev",
-    "dev:worker": "pnpm --filter @ai-workforce/worker dev"
+    "dev:api": "pnpm --filter @agentmill/board-api dev",
+    "dev:web": "pnpm --filter @agentmill/board-web dev",
+    "dev:worker": "pnpm --filter @agentmill/worker dev"
   }
 }

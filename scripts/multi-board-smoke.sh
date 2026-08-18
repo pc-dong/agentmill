@@ -22,7 +22,7 @@ if curl -sf "http://127.0.0.1:$PORT/boards" >/dev/null 2>&1; then
   exit 1
 fi
 
-AIW_DATA_DIR="$DATA" PORT="$PORT" pnpm --filter @ai-workforce/board-api dev >/tmp/aiw-multi-api.log 2>&1 &
+AM_DATA_DIR="$DATA" PORT="$PORT" pnpm --filter @agentmill/board-api dev >/tmp/aiw-multi-api.log 2>&1 &
 API_PID=$!
 for i in $(seq 1 50); do
   curl -sf "$BASE/boards" >/dev/null 2>&1 && break
@@ -52,7 +52,7 @@ curl -sf -X POST "$BASE/cards/$CARD_B/comments" -H 'content-type: application/js
   -d '{"author":"human","body":"@BA Bot 澄清一下需求 B"}' >/dev/null
 
 # Start ONE worker with NO board env → wildcard, serves every board
-AIW_API_BASE="$BASE" AIW_POLL_INTERVAL_MS=500 pnpm --filter @ai-workforce/worker dev >/tmp/aiw-multi-worker.log 2>&1 &
+AM_API_BASE="$BASE" AM_POLL_INTERVAL_MS=500 pnpm --filter @agentmill/worker dev >/tmp/aiw-multi-worker.log 2>&1 &
 WORKER_PID=$!
 
 wait_bot_comment() {

@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 API="${API:-http://127.0.0.1:8787}"
-export AIW_DATA_DIR="${AIW_DATA_DIR:-$(mktemp -d)}"
+export AM_DATA_DIR="${AM_DATA_DIR:-$(mktemp -d)}"
 API_PID=""
 STARTED_API=false
 
@@ -21,8 +21,8 @@ api_code() {
 }
 
 if [[ "$(api_code)" == "000" ]]; then
-  echo "Starting board-api with AIW_DATA_DIR=$AIW_DATA_DIR"
-  (cd "$ROOT" && AIW_DATA_DIR="$AIW_DATA_DIR" pnpm dev:api) &
+  echo "Starting board-api with AM_DATA_DIR=$AM_DATA_DIR"
+  (cd "$ROOT" && AM_DATA_DIR="$AM_DATA_DIR" pnpm dev:api) &
   API_PID=$!
   STARTED_API=true
   for _ in $(seq 1 30); do
@@ -51,11 +51,11 @@ done
 curl -sf -X POST "$API/cards/$EPIC_ID/comments" -H 'content-type: application/json' \
   -d '{"author":"human","body":"@Split Bot go"}' >/dev/null
 
-export AIW_BOARD_ID="$BOARD_ID"
-export AIW_API_BASE="$API"
-export AIW_DRIVER=mock
-pnpm --filter @ai-workforce/agent build
-pnpm --filter @ai-workforce/worker exec tsx src/once.ts
+export AM_BOARD_ID="$BOARD_ID"
+export AM_API_BASE="$API"
+export AM_DRIVER=mock
+pnpm --filter @agentmill/agent build
+pnpm --filter @agentmill/worker exec tsx src/once.ts
 
 CARDS=$(curl -sf "$API/boards/$BOARD_ID/cards")
 echo "$CARDS" | python3 -c '
@@ -71,7 +71,7 @@ print("plan3 split ok", len(tasks), "tasks, epic in verify")
 
 curl -sf -X POST "$API/cards/$EPIC_ID/comments" -H 'content-type: application/json' \
   -d '{"author":"human","body":"@Verify Bot check coverage"}' >/dev/null
-pnpm --filter @ai-workforce/worker exec tsx src/once.ts
+pnpm --filter @agentmill/worker exec tsx src/once.ts
 
 COMMENTS=$(curl -sf "$API/cards/$EPIC_ID/comments")
 echo "$COMMENTS" | python3 -c '

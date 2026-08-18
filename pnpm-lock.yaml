@@ -10,7 +10,7 @@ importers:
 
   apps/board-api:
     dependencies:
-      '@ai-workforce/domain':
+      '@agentmill/domain':
         specifier: workspace:*
         version: link:../../packages/domain
       '@hono/node-server':
@@ -84,7 +84,7 @@ importers:
 
   apps/worker:
     dependencies:
-      '@ai-workforce/agent':
+      '@agentmill/agent':
         specifier: workspace:*
         version: link:../../packages/agent
       ws:

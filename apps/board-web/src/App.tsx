@@ -5,12 +5,29 @@ import { CardDrawer } from "./CardDrawer";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SchedulesPanel } from "./SchedulesPanel";
 
-const BOARD_KEY = "aiw.boardId";
+const BOARD_KEY = "agentmill.boardId";
+const LEGACY_BOARD_KEY = "aiw.boardId";
+
+/** Read the current board id, migrating the legacy "aiw.boardId" key. */
+function readBoardId(): string | null {
+  const current = localStorage.getItem(BOARD_KEY);
+  if (current) return current;
+  const legacy = localStorage.getItem(LEGACY_BOARD_KEY);
+  if (legacy) {
+    localStorage.setItem(BOARD_KEY, legacy);
+    localStorage.removeItem(LEGACY_BOARD_KEY);
+    return legacy;
+  }
+  return null;
+}
+
+function writeBoardId(id: string) {
+  writeBoardId(id);
+  localStorage.removeItem(LEGACY_BOARD_KEY);
+}
 
 export function App() {
-  const [boardId, setBoardId] = useState<string | null>(
-    () => localStorage.getItem(BOARD_KEY),
-  );
+  const [boardId, setBoardId] = useState<string | null>(() => readBoardId());
   const [boards, setBoards] = useState<BoardSummary[]>([]);
   const [boardsLoaded, setBoardsLoaded] = useState(false);
   const [newBoardOpen, setNewBoardOpen] = useState(false);
@@ -18,7 +35,7 @@ export function App() {
   const [cards, setCards] = useState<Card[]>([]);
   const [selected, setSelected] = useState<Card | null>(null);
   const [workspacePath, setWorkspacePath] = useState(
-    "/tmp/ai-workforce-demo-ws",
+    "/tmp/agentmill-demo-ws",
   );
   const [title, setTitle] = useState("");
   const [epicIdForReq, setEpicIdForReq] = useState("");
@@ -34,8 +51,7 @@ export function App() {
     setBoardId((current) => {
       if (current && list.some((b) => b.id === current)) return current;
       const first = list[0]?.id ?? null;
-      if (first) localStorage.setItem(BOARD_KEY, first);
-      else localStorage.removeItem(BOARD_KEY);
+      if (first) writeBoardId(first);
       return first;
     });
   }, []);
@@ -50,7 +66,7 @@ export function App() {
   );
 
   function switchBoard(id: string) {
-    localStorage.setItem(BOARD_KEY, id);
+    writeBoardId(id);
     setBoardId(id);
     setSelected(null);
     setCards([]);
@@ -140,14 +156,14 @@ export function App() {
     if (!boardsLoaded) {
       return (
         <div className="app">
-          <h1>AI Workforce</h1>
+          <h1>Agentmill</h1>
           <p>加载看板列表…</p>
         </div>
       );
     }
     return (
       <div className="app">
-        <h1>AI Workforce</h1>
+        <h1>Agentmill</h1>
         <label>
           Workspace 路径
           <input
@@ -160,7 +176,7 @@ export function App() {
           type="button"
           onClick={async () => {
             const board = await api.createBoard("Local Board", workspacePath);
-            localStorage.setItem(BOARD_KEY, board.id);
+            writeBoardId(board.id);
             await refreshBoards();
           }}
         >
@@ -175,7 +191,7 @@ export function App() {
       <header className="app-header">
         {/* Row 1: board configuration */}
         <div className="toolbar-row board-config-row">
-          <h1 style={{ margin: 0, fontSize: 20 }}>AI Workforce</h1>
+          <h1 style={{ margin: 0, fontSize: 20 }}>Agentmill</h1>
           <select
             value={boardId}
             onChange={(e) => switchBoard(e.target.value)}

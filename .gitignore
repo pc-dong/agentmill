@@ -5,3 +5,4 @@ dist/
 *.sqlite
 .superpowers/
 *.tsbuildinfo
+.pnpm-store/

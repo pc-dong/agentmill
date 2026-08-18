@@ -1,4 +1,4 @@
-import { MockDriver } from "@ai-workforce/agent";
+import { MockDriver } from "@agentmill/agent";
 import { loadConfig } from "./config.js";
 import { BoardClient } from "./boardClient.js";
 import { tick } from "./loop.js";

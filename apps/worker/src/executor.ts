@@ -1,4 +1,4 @@
-import { buildPrompt, canonicalBaSettleArtifacts, parseBaSettle, ROLE_PROMPTS, type AgentDriver } from "@ai-workforce/agent";
+import { buildPrompt, canonicalBaSettleArtifacts, parseBaSettle, ROLE_PROMPTS, type AgentDriver } from "@agentmill/agent";
 import type { BoardClient } from "./boardClient.js";
 import { resolveBaTemplatesDir, writeBaDocuments } from "./baWrite.js";
 import {

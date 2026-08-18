@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { BaSettleProtocol } from "@ai-workforce/agent";
+import type { BaSettleProtocol } from "@agentmill/agent";
 import { writeBaDocuments } from "./baWrite.js";
 
 const templatesDir = path.join(

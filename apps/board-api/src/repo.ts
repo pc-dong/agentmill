@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import type { ArtifactRef, CardType, ColumnId, RequirementStatus } from "@ai-workforce/domain";
-import { dedupeArtifacts } from "@ai-workforce/domain";
+import type { ArtifactRef, CardType, ColumnId, RequirementStatus } from "@agentmill/domain";
+import { dedupeArtifacts } from "@agentmill/domain";
 import {
   assertValidCron,
   cronFromIntervalHours,

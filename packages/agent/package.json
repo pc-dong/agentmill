@@ -1,5 +1,5 @@
 {
-  "name": "@ai-workforce/agent",
+  "name": "@agentmill/agent",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.js",
