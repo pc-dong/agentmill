@@ -6,9 +6,24 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 .app { padding: 16px; }
+.app-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.toolbar-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.toolbar-spacer { flex: 1 1 auto; }
+.board-config-row { padding-bottom: 8px; border-bottom: 1px solid #e7e5e4; }
 .board {
   display: grid;
-  grid-template-columns: repeat(8, minmax(180px, 1fr));
+  grid-template-columns: repeat(6, minmax(160px, 1fr));
   gap: 8px;
   overflow-x: auto;
 }

@@ -34,6 +34,10 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     return c.json(board, 201);
   });
 
+  app.get("/boards", (c) => {
+    return c.json(repo.listBoards());
+  });
+
   app.get("/boards/:boardId", (c) => {
     const board = repo.getBoard(c.req.param("boardId"));
     if (!board) return c.json({ error: "not found" }, 404);

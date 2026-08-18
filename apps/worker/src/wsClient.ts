@@ -17,6 +17,7 @@ export type WsServerInMsg =
       type: "session.user_message";
       sessionId: string;
       cardId: string;
+      boardId: string;
       text: string;
     }
   | { type: "session.abort"; sessionId: string }
@@ -68,7 +69,7 @@ async function connectOnce(
     JSON.stringify({
       type: "hello",
       role: "worker",
-      boardId: deps.config.boardId,
+      boardIds: deps.config.boardIds,
       workerId: deps.config.workerId,
     }),
   );
@@ -116,7 +117,7 @@ async function handleIncoming(
         sessionId: msg.sessionId,
         cardId: msg.cardId,
         text: msg.text,
-        boardId: deps.config.boardId,
+        boardId: msg.boardId,
       },
       (out) => {
         if (ws.readyState === WebSocket.OPEN) {

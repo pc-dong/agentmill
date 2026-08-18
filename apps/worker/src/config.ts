@@ -1,8 +1,14 @@
 import os from "node:os";
 
+export const ALL_BOARDS = "*";
+
 export type WorkerConfig = {
   apiBase: string;
-  boardId: string;
+  /**
+   * Boards this worker serves. `[ALL_BOARDS]` ("*") means every board,
+   * auto-discovered via GET /boards on each tick.
+   */
+  boardIds: string[];
   workerId: string;
   driver: "mock" | "cursor";
   pollIntervalMs: number;
@@ -10,12 +16,20 @@ export type WorkerConfig = {
   modelId: string;
 };
 
-export function loadConfig(env: NodeJS.ProcessEnv): WorkerConfig {
-  const boardId = env.AIW_BOARD_ID;
-  if (!boardId) {
-    throw new Error("AIW_BOARD_ID is required");
+function parseBoardIds(env: NodeJS.ProcessEnv): string[] {
+  const ids = new Set<string>();
+  const single = env.AIW_BOARD_ID?.trim();
+  if (single) ids.add(single);
+  for (const part of (env.AIW_BOARD_IDS ?? "").split(",")) {
+    const v = part.trim();
+    if (v) ids.add(v);
   }
+  if (ids.has(ALL_BOARDS)) return [ALL_BOARDS];
+  // Default: serve every board (multi-workspace reuse).
+  return ids.size > 0 ? [...ids] : [ALL_BOARDS];
+}
 
+export function loadConfig(env: NodeJS.ProcessEnv): WorkerConfig {
   const driver = env.AIW_DRIVER;
   if (driver && driver !== "mock" && driver !== "cursor") {
     throw new Error(`Invalid AIW_DRIVER: ${driver}`);
@@ -27,7 +41,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): WorkerConfig {
 
   return {
     apiBase: env.AIW_API_BASE ?? "http://127.0.0.1:8787",
-    boardId,
+    boardIds: parseBoardIds(env),
     workerId: env.AIW_WORKER_ID ?? `${os.hostname()}-${process.pid}`,
     driver: (driver as "mock" | "cursor" | undefined) ?? "mock",
     pollIntervalMs,

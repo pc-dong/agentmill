@@ -23,7 +23,10 @@ const driver = createDriver(config);
 
 async function pollLoop() {
   for (;;) {
-    const r = await tick(client, driver, { createPollJobs: true });
+    const r = await tick(client, driver, {
+      createPollJobs: true,
+      boardIds: config.boardIds,
+    });
     if (r.claimed || r.pollCreated) {
       console.log(r);
     }
@@ -33,7 +36,7 @@ async function pollLoop() {
 
 async function main() {
   console.log(
-    `worker ${config.workerId} board=${config.boardId} driver=${config.driver}`,
+    `worker ${config.workerId} boards=${config.boardIds.join(",")} driver=${config.driver}`,
   );
   await Promise.all([
     pollLoop(),

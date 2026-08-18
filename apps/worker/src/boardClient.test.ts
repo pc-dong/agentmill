@@ -6,7 +6,7 @@ const BOARD_ID = "board-1";
 const WORKER_ID = "worker-1";
 
 function client() {
-  return new BoardClient({ apiBase: API, boardId: BOARD_ID, workerId: WORKER_ID });
+  return new BoardClient({ apiBase: API, workerId: WORKER_ID });
 }
 
 afterEach(() => {
@@ -24,7 +24,7 @@ describe("BoardClient", () => {
       }),
     );
 
-    await expect(client().listClaimableJobs()).resolves.toEqual(jobs);
+    await expect(client().listClaimableJobs(BOARD_ID)).resolves.toEqual(jobs);
   });
 
   it("claimJob POSTs workerId and returns job or null on 409", async () => {
@@ -87,7 +87,23 @@ describe("BoardClient", () => {
     await client().setJobProgress("j1", "执行中…");
   });
 
-  it("getBoard returns workspacePath", async () => {
+  it("listBoards GETs /boards", async () => {
+    const boards = [
+      { id: "b1", name: "One", workspacePath: "/tmp/ws1", createdAt: "t1" },
+      { id: "b2", name: "Two", workspacePath: "/tmp/ws2", createdAt: "t2" },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(url).toBe(`${API}/boards`);
+        return new Response(JSON.stringify(boards), { status: 200 });
+      }),
+    );
+
+    await expect(client().listBoards()).resolves.toEqual(boards);
+  });
+
+  it("getBoard returns the board for the given id", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -103,7 +119,8 @@ describe("BoardClient", () => {
       }),
     );
 
-    await expect(client().getBoard()).resolves.toEqual({
+    await expect(client().getBoard(BOARD_ID)).resolves.toMatchObject({
+      id: BOARD_ID,
       workspacePath: "/tmp/ws",
     });
   });
@@ -123,7 +140,7 @@ describe("BoardClient", () => {
       }),
     );
 
-    await expect(client().getCard("c2")).resolves.toMatchObject({
+    await expect(client().getCard(BOARD_ID, "c2")).resolves.toMatchObject({
       id: "c2",
       title: "Two",
     });
@@ -135,7 +152,9 @@ describe("BoardClient", () => {
       vi.fn(async () => new Response(JSON.stringify([]), { status: 200 })),
     );
 
-    await expect(client().getCard("missing")).rejects.toThrow(/not found/i);
+    await expect(client().getCard(BOARD_ID, "missing")).rejects.toThrow(
+      /not found/i,
+    );
   });
 
   it("getEmployee filters from list employees", async () => {
@@ -153,7 +172,7 @@ describe("BoardClient", () => {
       }),
     );
 
-    await expect(client().getEmployee("e2")).resolves.toMatchObject({
+    await expect(client().getEmployee(BOARD_ID, "e2")).resolves.toMatchObject({
       id: "e2",
       role: "dev",
     });
@@ -205,7 +224,9 @@ describe("BoardClient", () => {
       }),
     );
 
-    await expect(client().createPollJobs()).resolves.toEqual({ created: 2 });
+    await expect(client().createPollJobs(BOARD_ID)).resolves.toEqual({
+      created: 2,
+    });
   });
 
   it("listCards GETs /boards/:boardId/cards", async () => {
@@ -218,7 +239,7 @@ describe("BoardClient", () => {
       }),
     );
 
-    await expect(client().listCards()).resolves.toEqual(cards);
+    await expect(client().listCards(BOARD_ID)).resolves.toEqual(cards);
   });
 
   it("createCard POSTs card payload", async () => {
@@ -239,7 +260,7 @@ describe("BoardClient", () => {
     );
 
     await expect(
-      client().createCard({
+      client().createCard(BOARD_ID, {
         type: "task",
         title: "T",
         description: "d",

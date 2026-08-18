@@ -25,24 +25,31 @@ pnpm --filter @ai-workforce/board-api test
 ## Plan 2 — Worker
 
 ```bash
-export AIW_BOARD_ID=<board-id from UI or API>
+# Default: serve ALL boards/workspaces (auto-discovered each tick)
 export AIW_DRIVER=mock          # or cursor
 export CURSOR_API_KEY=...       # required for cursor
+
+# Optional: restrict to specific boards (comma-separated)
+# export AIW_BOARD_IDS=<board-id-1>,<board-id-2>
+# export AIW_BOARD_ID=<board-id>     # legacy single-board form, still works
+
 pnpm --filter @ai-workforce/agent build
 pnpm dev:worker
 ```
 
+**Multi-workspace:** one worker process serves every board, each board bound to its own workspace directory. Workspace access is isolated per card: jobs resolve the workspace from the board that owns the card (never from worker config), Cursor runs with `cwd` = that workspace, and split/scanner-created cards always land on the job's own board. WS session chats are routed by the session's `boardId`.
+
 Poll creates one job per (card, employee) pair. It does not re-queue cards that already have any job for that employee (open, claimed, done, or failed). Use `@Design Bot` (or other role bots) in a comment to re-run work on a card.
 
 Smoke (requires API already running on `:8787`; does not auto-start): `./scripts/plan2-smoke.sh`
+Multi-workspace smoke (auto-starts its own API on `:8799`): `./scripts/multi-board-smoke.sh`
 
 ## Plan 3 — Chat + role outcomes
 
 Design sidebar streams chat over WebSocket; settle writes artifacts. After oneshot jobs complete, the worker applies role outcomes (Split → tasks + verify, Verify/Dev/Test/Review column rules).
 
 ```bash
-export AIW_BOARD_ID=<board-id>
-export AIW_DRIVER=mock          # or cursor
+export AIW_DRIVER=mock          # or cursor   (worker serves all boards by default)
 pnpm --filter @ai-workforce/agent build
 pnpm dev:worker                 # poll + WS session loop
 ```

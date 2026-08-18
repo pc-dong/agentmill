@@ -31,9 +31,16 @@ export async function handleSessionUserMessage(
   activeControllers.set(msg.sessionId, controller);
 
   try {
-    const board = await client.getBoard();
-    const card = await client.getCard(msg.cardId);
+    // Workspace isolation: board/card context comes from the session's own
+    // board (relayed by the hub), never from worker configuration.
+    const board = await client.getBoard(msg.boardId);
+    const card = await client.getCard(msg.boardId, msg.cardId);
     const session = await client.getSession(msg.sessionId);
+    if (session.boardId !== msg.boardId) {
+      throw new Error(
+        `board mismatch: session ${msg.sessionId} belongs to ${session.boardId}, routed as ${msg.boardId}`,
+      );
+    }
     const rawMessages = await client.listSessionMessages(msg.sessionId);
 
     const history = rawMessages

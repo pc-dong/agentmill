@@ -86,9 +86,9 @@ describe("WsHub", () => {
     const ui = createMockWs();
     const otherBoardUi = createMockWs();
 
-    hub.subscribe(worker, { role: "worker", boardId });
-    hub.subscribe(ui, { role: "ui", boardId });
-    hub.subscribe(otherBoardUi, { role: "ui", boardId: "other-board" });
+    hub.subscribe(worker, { role: "worker", boardIds: [boardId] });
+    hub.subscribe(ui, { role: "ui", boardIds: [boardId] });
+    hub.subscribe(otherBoardUi, { role: "ui", boardIds: ["other-board"] });
 
     hub.broadcast(boardId, "ui", {
       type: "session.agent_delta",
@@ -105,7 +105,7 @@ describe("WsHub", () => {
   it("persists user messages and fans out to workers", () => {
     const { hub, sessions, boardId, sessionId } = tempHub();
     const worker = createMockWs();
-    hub.subscribe(worker, { role: "worker", boardId });
+    hub.subscribe(worker, { role: "worker", boardIds: [boardId] });
 
     hub.handleMessage(
       createMockWs(),
@@ -123,12 +123,13 @@ describe("WsHub", () => {
     const payload = JSON.parse(worker.sent[0]!);
     expect(payload.type).toBe("session.user_message");
     expect(payload.text).toBe("align on theme");
+    expect(payload.boardId).toBe(boardId);
   });
 
   it("forwards session.abort to workers without persisting", () => {
     const { hub, sessions, boardId, sessionId } = tempHub();
     const worker = createMockWs();
-    hub.subscribe(worker, { role: "worker", boardId });
+    hub.subscribe(worker, { role: "worker", boardIds: [boardId] });
 
     hub.handleMessage(
       createMockWs(),
@@ -143,7 +144,7 @@ describe("WsHub", () => {
   it("session.retry forwards last user text without appending", () => {
     const { hub, sessions, boardId, sessionId } = tempHub();
     const worker = createMockWs();
-    hub.subscribe(worker, { role: "worker", boardId });
+    hub.subscribe(worker, { role: "worker", boardIds: [boardId] });
     sessions.appendMessage({
       sessionId,
       role: "user",
@@ -162,10 +163,70 @@ describe("WsHub", () => {
     expect(payload.text).toBe("retry me");
   });
 
+  it("wildcard subscription receives every board", () => {
+    const { hub, boardId } = tempHub();
+    const worker = createMockWs();
+    hub.subscribe(worker, { role: "worker", boardIds: ["*"] });
+
+    hub.broadcast(boardId, "worker", {
+      type: "session.agent_delta",
+      sessionId: "s1",
+      text: "chunk",
+    });
+    hub.broadcast("any-other-board", "worker", {
+      type: "session.agent_delta",
+      sessionId: "s2",
+      text: "chunk2",
+    });
+
+    expect(worker.sent).toHaveLength(2);
+  });
+
+  it("hello with boardIds array subscribes to listed boards", () => {
+    const { hub, boardId, sessionId } = tempHub();
+    const worker = createMockWs();
+    hub.handleConnection(worker);
+    worker.handlers.message![0]!(
+      JSON.stringify({
+        type: "hello",
+        role: "worker",
+        boardIds: [boardId],
+      }),
+    );
+
+    hub.handleMessage(
+      createMockWs(),
+      JSON.stringify({ type: "session.abort", sessionId }),
+    );
+
+    expect(worker.sent).toHaveLength(1);
+    expect(JSON.parse(worker.sent[0]!).type).toBe("session.abort");
+  });
+
+  it("hello with legacy single boardId still works", () => {
+    const { hub, boardId, sessionId } = tempHub();
+    const worker = createMockWs();
+    hub.handleConnection(worker);
+    worker.handlers.message![0]!(
+      JSON.stringify({
+        type: "hello",
+        role: "worker",
+        boardId,
+      }),
+    );
+
+    hub.handleMessage(
+      createMockWs(),
+      JSON.stringify({ type: "session.abort", sessionId }),
+    );
+
+    expect(worker.sent).toHaveLength(1);
+  });
+
   it("unsubscribes on close", () => {
     const { hub, boardId } = tempHub();
     const ui = createMockWs();
-    hub.subscribe(ui, { role: "ui", boardId });
+    hub.subscribe(ui, { role: "ui", boardIds: [boardId] });
     hub.unsubscribe(ui);
 
     hub.broadcast(boardId, "ui", {

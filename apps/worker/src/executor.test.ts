@@ -53,6 +53,7 @@ function fakeClient(overrides: {
       overrides.getCard ??
       (async () => ({
         id: "c1",
+        boardId: "b1",
         type: "epic",
         title: "T",
         description: "D",
@@ -172,6 +173,40 @@ describe("executeClaimedJob", () => {
     expect(prompt).toMatch(/SUMMARY: done login/);
   });
 
+  it("fails the job when card belongs to a different board (workspace isolation)", async () => {
+    const failJob = vi.fn(async (_jobId: string, _message?: string) => {});
+    const completeJob = vi.fn(async () => {});
+    const oneshot = vi.fn(async () => ({
+      status: "ok" as const,
+      summary: "should not run",
+      artifacts: [],
+    }));
+    const client = fakeClient({
+      failJob,
+      completeJob,
+      getCard: vi.fn(async () => ({
+        id: "c1",
+        boardId: "b-other",
+        type: "task",
+        title: "T",
+        description: "",
+        column: "dev",
+        epicId: null,
+        frozen: false,
+        artifacts: [],
+      })),
+    });
+    await executeClaimedJob(
+      client as never,
+      { id: "mock", displayName: "Mock", oneshot, chatStream: async function* () {} },
+      job,
+    );
+    expect(failJob).toHaveBeenCalledOnce();
+    expect(failJob.mock.calls[0]![1]).toMatch(/board mismatch/);
+    expect(completeJob).not.toHaveBeenCalled();
+    expect(oneshot).not.toHaveBeenCalled();
+  });
+
   it("calls failJob when driver returns error status", async () => {
     const failJob = vi.fn(async () => {});
     const driver: AgentDriver = {
@@ -196,6 +231,7 @@ describe("executeClaimedJob", () => {
     const client = fakeClient({ createCard, moveCard, completeJob });
     client.getCard = async () => ({
       id: "design1",
+      boardId: "b1",
       type: "design",
       title: "Design round",
       description: "",
@@ -307,6 +343,7 @@ describe("executeClaimedJob", () => {
         getBoard: vi.fn(async () => ({ workspacePath })),
         getCard: vi.fn(async () => ({
           id: "req1",
+          boardId: "b1",
           type: "requirement",
           title: "OAuth",
           description: "",
@@ -386,6 +423,7 @@ describe("executeClaimedJob", () => {
         postComment,
         getCard: vi.fn(async () => ({
           id: "req1",
+          boardId: "b1",
           type: "requirement",
           title: "OAuth",
           description: "",
@@ -442,6 +480,7 @@ describe("executeClaimedJob", () => {
         postComment,
         getCard: vi.fn(async () => ({
           id: "design1",
+          boardId: "b1",
           type: "design",
           title: "Design round",
           description: "",
@@ -504,10 +543,11 @@ describe("executeClaimedJob", () => {
         "ARTIFACT file docs/epics/E-WRONG-999-wrong/prds/P-999-01-x.md PRD",
       ].join("\n");
 
-      const getCard = vi.fn(async (id: string) => {
+      const getCard = vi.fn(async (_boardId: string, id: string) => {
         if (id === "epic1") {
           return {
             id: "epic1",
+            boardId: "b1",
             type: "epic",
             title: "Login",
             description: "epic_id: E-DEMO-001\n",
@@ -519,6 +559,7 @@ describe("executeClaimedJob", () => {
         }
         return {
           id: "req1",
+          boardId: "b1",
           type: "requirement",
           title: "SSO",
           description: "",

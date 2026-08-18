@@ -2,10 +2,27 @@ import { describe, expect, it } from "vitest";
 import { loadConfig } from "./config.js";
 
 describe("loadConfig", () => {
-  it("requires AIW_BOARD_ID", () => {
-    expect(() =>
-      loadConfig({ AIW_API_BASE: "http://127.0.0.1:8787" }),
-    ).toThrow(/AIW_BOARD_ID/);
+  it("defaults to all boards (wildcard) when no board env is set", () => {
+    const c = loadConfig({ AIW_API_BASE: "http://127.0.0.1:8787" });
+    expect(c.boardIds).toEqual(["*"]);
+  });
+
+  it("accepts a single board via AIW_BOARD_ID (legacy)", () => {
+    const c = loadConfig({ AIW_BOARD_ID: "b1" });
+    expect(c.boardIds).toEqual(["b1"]);
+  });
+
+  it("accepts a comma-separated allowlist via AIW_BOARD_IDS", () => {
+    const c = loadConfig({ AIW_BOARD_IDS: "b1, b2 ,,b3" });
+    expect(c.boardIds).toEqual(["b1", "b2", "b3"]);
+  });
+
+  it("unions AIW_BOARD_ID and AIW_BOARD_IDS and honors wildcard", () => {
+    const c = loadConfig({ AIW_BOARD_ID: "b1", AIW_BOARD_IDS: "b2,b1" });
+    expect(c.boardIds).toEqual(["b1", "b2"]);
+
+    const all = loadConfig({ AIW_BOARD_ID: "b1", AIW_BOARD_IDS: "*" });
+    expect(all.boardIds).toEqual(["*"]);
   });
 
   it("defaults driver to mock", () => {

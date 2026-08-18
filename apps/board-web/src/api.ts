@@ -101,7 +101,15 @@ export type SessionMessage = {
   createdAt: string;
 };
 
+export type BoardSummary = {
+  id: string;
+  name: string;
+  workspacePath: string;
+  createdAt: string;
+};
+
 export const api = {
+  listBoards: () => json<BoardSummary[]>(fetch(`${base}/boards`)),
   createBoard: (name: string, workspacePath: string) =>
     json<{ id: string; name: string; workspacePath: string }>(
       fetch(`${base}/boards`, {

@@ -6,7 +6,7 @@ import {
   formatMentionCommentHistory,
   parseMentionPayload,
 } from "./mentionContext.js";
-import { applyRoleOutcome } from "./outcomes.js";
+import { applyRoleOutcome, type OutcomeBoardClient } from "./outcomes.js";
 
 /** Parse `epic_id: E-...` from an epic card description. */
 export function parseEpicIdFromDescription(description: string): string | null {
@@ -57,9 +57,18 @@ export async function executeClaimedJob(
   },
 ): Promise<void> {
   try {
-    const board = await client.getBoard();
-    const card = await client.getCard(job.cardId);
-    const employee = await client.getEmployee(job.employeeId);
+    // Workspace isolation: resolve board/card/employee ONLY from the board
+    // that owns the job, never from worker configuration.
+    const board = await client.getBoard(job.boardId);
+    const card = await client.getCard(job.boardId, job.cardId);
+    if (card.boardId !== job.boardId) {
+      await client.failJob(
+        job.id,
+        `board mismatch: job belongs to ${job.boardId} but card ${card.id} belongs to ${card.boardId}`,
+      );
+      return;
+    }
+    const employee = await client.getEmployee(job.boardId, job.employeeId);
     const trigger = job.trigger ?? "poll";
 
     if (trigger === "settle") {
@@ -75,7 +84,7 @@ export async function executeClaimedJob(
         protocol = { ...protocol, mode: "link" };
       }
       if (card.epicId && protocol.mode === "link") {
-        const epicCard = await client.getCard(card.epicId);
+        const epicCard = await client.getCard(job.boardId, card.epicId);
         const linkedKey = parseEpicIdFromDescription(epicCard.description ?? "");
         if (linkedKey && protocol.epicId !== linkedKey) {
           await client.failJob(
@@ -137,7 +146,7 @@ export async function executeClaimedJob(
 
     let prompt = promptBase;
     if (employee.role === "split" && card.type === "design") {
-      const all = await client.listCards();
+      const all = await client.listCards(job.boardId);
       const designCard = all.find((c) => c.id === card.id) as
         | { requirementIds?: string[] }
         | undefined;
@@ -223,6 +232,37 @@ export async function executeClaimedJob(
 
     // Apply role outcomes while job is still claimed so failures (e.g. missing
     // Dev SUMMARY) can failJob instead of silently succeeding after complete.
+    // Board-scoped adapter pins created cards to the job's own board.
+    const boardScopedClient: OutcomeBoardClient = {
+      createCard: (input) => client.createCard(job.boardId, input),
+      moveCard: (cardId, to, actor) => client.moveCard(cardId, to, actor),
+      ...(client.updateCard
+        ? {
+            updateCard: (
+              cardId: string,
+              patch: Parameters<typeof client.updateCard>[1],
+            ) => client.updateCard(cardId, patch),
+          }
+        : {}),
+      ...(client.listCards
+        ? { listCards: () => client.listCards(job.boardId) }
+        : {}),
+      postTestResult: (cardId, passed) => client.postTestResult(cardId, passed),
+      postComment: (cardId, author, body) =>
+        client.postComment(cardId, author, body),
+      ...(client.markDesignSplitVerified
+        ? {
+            markDesignSplitVerified: (designId: string) =>
+              client.markDesignSplitVerified(designId),
+          }
+        : {}),
+      ...(client.markDesignSplitDirty
+        ? {
+            markDesignSplitDirty: (designId: string) =>
+              client.markDesignSplitDirty(designId),
+          }
+        : {}),
+    };
     await applyRoleOutcome(
       employee.role,
       result.summary,
@@ -253,7 +293,7 @@ export async function executeClaimedJob(
               })()
             : undefined,
       },
-      client,
+      boardScopedClient,
     );
 
     await client.completeJob(job.id, {

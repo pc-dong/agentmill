@@ -6,7 +6,15 @@ const WS_OPEN = 1;
 export type WsClientRole = "ui" | "worker";
 
 export type WsClientMsg =
-  | { type: "hello"; role: WsClientRole; boardId: string; workerId?: string }
+  | {
+      type: "hello";
+      role: WsClientRole;
+      /** Legacy single-board subscription; ignored when boardIds is present. */
+      boardId?: string;
+      /** Boards to subscribe to; "*" subscribes to every board. */
+      boardIds?: string[];
+      workerId?: string;
+    }
   | { type: "session.user_message"; sessionId: string; text: string }
   | { type: "session.abort"; sessionId: string }
   | { type: "session.retry"; sessionId: string }
@@ -19,6 +27,8 @@ export type WsServerMsg =
       type: "session.user_message";
       sessionId: string;
       cardId: string;
+      /** Board that owns the session — workers use it to scope workspace access. */
+      boardId: string;
       text: string;
     }
   | { type: "session.abort"; sessionId: string }
@@ -29,9 +39,26 @@ export type WsServerMsg =
 
 type ClientState = {
   role: WsClientRole;
-  boardId: string;
+  boardIds: string[];
   workerId?: string;
 };
+
+/** Normalize hello payload into a board subscription list. */
+function subscriptionFromHello(msg: {
+  boardId?: string;
+  boardIds?: string[];
+}): string[] {
+  if (Array.isArray(msg.boardIds) && msg.boardIds.length > 0) {
+    const ids = msg.boardIds.filter((id) => typeof id === "string" && id);
+    if (ids.includes("*")) return ["*"];
+    return ids;
+  }
+  return msg.boardId ? [msg.boardId] : [];
+}
+
+function isSubscribed(state: ClientState, boardId: string): boolean {
+  return state.boardIds.includes("*") || state.boardIds.includes(boardId);
+}
 
 export class WsHub {
   private readonly clients = new Map<WebSocket, ClientState>();
@@ -58,7 +85,7 @@ export class WsHub {
     const payload = JSON.stringify(msg);
     for (const [ws, state] of this.clients) {
       if (
-        state.boardId === boardId &&
+        isSubscribed(state, boardId) &&
         state.role === role &&
         ws.readyState === WS_OPEN
       ) {
@@ -80,7 +107,7 @@ export class WsHub {
       case "hello":
         this.subscribe(ws, {
           role: msg.role,
-          boardId: msg.boardId,
+          boardIds: subscriptionFromHello(msg),
           workerId: msg.workerId,
         });
         break;
@@ -100,6 +127,7 @@ export class WsHub {
           type: "session.user_message",
           sessionId: msg.sessionId,
           cardId: session.cardId,
+          boardId: session.boardId,
           text: msg.text,
         });
         break;
@@ -140,6 +168,7 @@ export class WsHub {
           type: "session.user_message",
           sessionId: msg.sessionId,
           cardId: session.cardId,
+          boardId: session.boardId,
           text: lastUser.body,
         });
         break;

@@ -58,19 +58,27 @@ export type Session = {
   updatedAt: string;
 };
 
+export type Board = {
+  id: string;
+  name: string;
+  workspacePath: string;
+  createdAt: string;
+};
+
 export type BoardClientOptions = {
   apiBase: string;
-  boardId: string;
   workerId: string;
 };
 
 export class BoardClient {
   constructor(private readonly opts: BoardClientOptions) {}
 
-  async listClaimableJobs(): Promise<Job[]> {
-    return this.getJson<Job[]>(
-      `/boards/${this.opts.boardId}/jobs/claimable`,
-    );
+  async listBoards(): Promise<Board[]> {
+    return this.getJson<Board[]>(`/boards`);
+  }
+
+  async listClaimableJobs(boardId: string): Promise<Job[]> {
+    return this.getJson<Job[]>(`/boards/${boardId}/jobs/claimable`);
   }
 
   async claimJob(jobId: string): Promise<Job | null> {
@@ -104,19 +112,16 @@ export class BoardClient {
     await this.postJson(`/jobs/${jobId}/progress`, { text });
   }
 
-  async getBoard(): Promise<{ workspacePath: string }> {
-    const board = await this.getJson<{ workspacePath: string }>(
-      `/boards/${this.opts.boardId}`,
-    );
-    return { workspacePath: board.workspacePath };
+  async getBoard(boardId: string): Promise<Board> {
+    return this.getJson<Board>(`/boards/${boardId}`);
   }
 
-  async listCards(): Promise<Card[]> {
-    return this.getJson<Card[]>(`/boards/${this.opts.boardId}/cards`);
+  async listCards(boardId: string): Promise<Card[]> {
+    return this.getJson<Card[]>(`/boards/${boardId}/cards`);
   }
 
-  async getCard(cardId: string): Promise<Card> {
-    const cards = await this.listCards();
+  async getCard(boardId: string, cardId: string): Promise<Card> {
+    const cards = await this.listCards(boardId);
     const card = cards.find((c) => c.id === cardId);
     if (!card) {
       throw new Error(`Card not found: ${cardId}`);
@@ -124,17 +129,20 @@ export class BoardClient {
     return card;
   }
 
-  async createCard(input: {
-    type: "epic" | "requirement" | "design" | "task";
-    title: string;
-    description?: string;
-    column: string;
-    epicId?: string | null;
-    designId?: string | null;
-    frozen?: boolean;
-    artifacts?: Array<{ kind: string; href: string; label?: string }>;
-  }): Promise<Card> {
-    return this.postJson<Card>(`/boards/${this.opts.boardId}/cards`, {
+  async createCard(
+    boardId: string,
+    input: {
+      type: "epic" | "requirement" | "design" | "task";
+      title: string;
+      description?: string;
+      column: string;
+      epicId?: string | null;
+      designId?: string | null;
+      frozen?: boolean;
+      artifacts?: Array<{ kind: string; href: string; label?: string }>;
+    },
+  ): Promise<Card> {
+    return this.postJson<Card>(`/boards/${boardId}/cards`, {
       description: "",
       epicId: null,
       ...input,
@@ -220,9 +228,9 @@ export class BoardClient {
     return this.postJson(`/cards/${cardId}/ba-settle`, body);
   }
 
-  async getEmployee(employeeId: string): Promise<Employee> {
+  async getEmployee(boardId: string, employeeId: string): Promise<Employee> {
     const employees = await this.getJson<Employee[]>(
-      `/boards/${this.opts.boardId}/employees`,
+      `/boards/${boardId}/employees`,
     );
     const employee = employees.find((e) => e.id === employeeId);
     if (!employee) {
@@ -231,14 +239,14 @@ export class BoardClient {
     return employee;
   }
 
-  async createPollJobs(): Promise<{ created: number }> {
-    return this.postJson(`/boards/${this.opts.boardId}/poll-jobs`, {});
+  async createPollJobs(boardId: string): Promise<{ created: number }> {
+    return this.postJson(`/boards/${boardId}/poll-jobs`, {});
   }
 
-  async processDueSchedules(): Promise<{
+  async processDueSchedules(boardId: string): Promise<{
     enqueued: Array<{ scheduleId: string; runCardId: string; jobId: string }>;
   }> {
-    return this.postJson(`/boards/${this.opts.boardId}/schedules/due`, {});
+    return this.postJson(`/boards/${boardId}/schedules/due`, {});
   }
 
   async listSessionMessages(sessionId: string): Promise<SessionMessage[]> {

@@ -6,6 +6,7 @@ import { tick } from "./loop.js";
 const config = loadConfig(process.env);
 const r = await tick(new BoardClient(config), new MockDriver(), {
   createPollJobs: true,
+  boardIds: config.boardIds,
 });
 console.log(JSON.stringify(r));
 if (r.claimed < 1 && r.pollCreated < 1) {

@@ -204,6 +204,15 @@ export class BoardRepo {
     return row ?? null;
   }
 
+  listBoards(): Board[] {
+    return this.db
+      .prepare(
+        `SELECT id, name, workspace_path as workspacePath, created_at as createdAt
+         FROM boards ORDER BY created_at ASC, id ASC`,
+      )
+      .all() as Board[];
+  }
+
   createCard(input: {
     boardId: string;
     type: CardType;

@@ -31,6 +31,35 @@ function appWithRepo() {
 }
 
 describe("routes", () => {
+  it("GET /boards lists every board with workspace paths", async () => {
+    const { app } = appWithRepo();
+    const res = await app.request("http://localhost/boards");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+
+    await app.request("http://localhost/boards", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "A", workspacePath: "/tmp/ws-a" }),
+    });
+    await app.request("http://localhost/boards", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "B", workspacePath: "/tmp/ws-b" }),
+    });
+
+    const res2 = await app.request("http://localhost/boards");
+    const list2 = (await res2.json()) as Array<{
+      name: string;
+      workspacePath: string;
+    }>;
+    expect(list2.map((b) => b.name)).toEqual(["A", "B"]);
+    expect(list2.map((b) => b.workspacePath)).toEqual([
+      "/tmp/ws-a",
+      "/tmp/ws-b",
+    ]);
+  });
+
   it("blocks design → done until related tasks are done", async () => {
     const { app, repo } = appWithRepo();
     const boardRes = await app.request("http://localhost/boards", {
