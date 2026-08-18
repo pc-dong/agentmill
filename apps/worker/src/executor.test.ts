@@ -13,21 +13,38 @@ const templatesDir = path.join(
   "../../../packages/agent/templates/ba",
 );
 
+/** Test doubles: vitest Mock parameter types are not assignable under strictFunctionTypes. */
+type TestFn = (...args: any[]) => any;
+
 function fakeClient(overrides: {
-  completeJob?: ReturnType<typeof vi.fn>;
-  failJob?: ReturnType<typeof vi.fn>;
-  setJobProgress?: ReturnType<typeof vi.fn>;
-  listComments?: ReturnType<typeof vi.fn>;
-  listCards?: ReturnType<typeof vi.fn>;
-  moveCard?: ReturnType<typeof vi.fn>;
-  createCard?: ReturnType<typeof vi.fn>;
-  postComment?: ReturnType<typeof vi.fn>;
-  postTestResult?: ReturnType<typeof vi.fn>;
-  baSettle?: ReturnType<typeof vi.fn>;
-  getBoard?: ReturnType<typeof vi.fn>;
-  getCard?: ReturnType<typeof vi.fn>;
-  getEmployee?: ReturnType<typeof vi.fn>;
-} = {}) {
+  completeJob?: TestFn;
+  failJob?: TestFn;
+  setJobProgress?: TestFn;
+  listComments?: TestFn;
+  listCards?: TestFn;
+  moveCard?: TestFn;
+  createCard?: TestFn;
+  postComment?: TestFn;
+  postTestResult?: TestFn;
+  baSettle?: TestFn;
+  getBoard?: TestFn;
+  getCard?: TestFn;
+  getEmployee?: TestFn;
+} = {}): {
+  completeJob: TestFn;
+  failJob: TestFn;
+  setJobProgress: TestFn;
+  listComments: TestFn;
+  listCards: TestFn;
+  moveCard: TestFn;
+  createCard: TestFn;
+  postComment: TestFn;
+  postTestResult: TestFn;
+  baSettle: TestFn;
+  getBoard: TestFn;
+  getCard: TestFn;
+  getEmployee: TestFn;
+} {
   return {
     getBoard:
       overrides.getBoard ??
@@ -84,7 +101,7 @@ describe("executeClaimedJob", () => {
   });
 
   it("wires oneshot onProgress to setJobProgress and writes phases", async () => {
-    const setJobProgress = vi.fn(async () => {});
+    const setJobProgress = vi.fn(async (_jobId: string, _text: string) => {});
     const oneshot = vi.fn(async (input: { onProgress?: (m: string) => void }) => {
       input.onProgress?.("执行中：stream…");
       return {
@@ -123,7 +140,7 @@ describe("executeClaimedJob", () => {
       },
       { id: "c2", author: "human", body: "@Dev Bot 当前分支是什么" },
     ]);
-    const oneshot = vi.fn(async () => ({
+    const oneshot = vi.fn(async (_input: { prompt: string }) => ({
       status: "ok" as const,
       summary: "当前在 feat/foo",
       artifacts: [] as Array<{ kind: "file"; href: string; label?: string }>,
@@ -467,7 +484,7 @@ describe("executeClaimedJob", () => {
 
       const baSettle = vi.fn(async () => ({}));
       const completeJob = vi.fn(async () => {});
-      const failJob = vi.fn(async () => {});
+      const failJob = vi.fn(async (_jobId: string, _message?: string) => {});
       const oneshot = vi.fn(async () => ({
         status: "ok" as const,
         summary: "should not run",

@@ -1,29 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { applyRoleOutcome, type OutcomeBoardClient } from "./outcomes.js";
 
-function fakeClient(
-  overrides: Partial<OutcomeBoardClient> = {},
-): OutcomeBoardClient & {
-  createCard: ReturnType<typeof vi.fn>;
-  moveCard: ReturnType<typeof vi.fn>;
-  updateCard: ReturnType<typeof vi.fn>;
-  listCards: ReturnType<typeof vi.fn>;
-  postTestResult: ReturnType<typeof vi.fn>;
-  postComment: ReturnType<typeof vi.fn>;
-  markDesignSplitVerified: ReturnType<typeof vi.fn>;
-  markDesignSplitDirty: ReturnType<typeof vi.fn>;
-} {
+function fakeClient(overrides: Partial<OutcomeBoardClient> = {}) {
   return {
-    createCard: overrides.createCard ?? vi.fn(async () => ({ id: "new" })),
-    moveCard: overrides.moveCard ?? vi.fn(async () => ({ id: "moved" })),
-    updateCard: overrides.updateCard ?? vi.fn(async () => ({})),
-    listCards: overrides.listCards ?? vi.fn(async () => []),
-    postTestResult: overrides.postTestResult ?? vi.fn(async () => {}),
-    postComment: overrides.postComment ?? vi.fn(async () => {}),
-    markDesignSplitVerified:
-      overrides.markDesignSplitVerified ?? vi.fn(async () => {}),
-    markDesignSplitDirty:
-      overrides.markDesignSplitDirty ?? vi.fn(async () => {}),
+    createCard: vi.fn(overrides.createCard ?? (async () => ({ id: "new" }))),
+    moveCard: vi.fn(overrides.moveCard ?? (async () => ({ id: "moved" }))),
+    updateCard: vi.fn(overrides.updateCard ?? (async () => ({}))),
+    listCards: vi.fn(overrides.listCards ?? (async () => [])),
+    postTestResult: vi.fn(overrides.postTestResult ?? (async () => {})),
+    postComment: vi.fn(overrides.postComment ?? (async () => {})),
+    markDesignSplitVerified: vi.fn(
+      overrides.markDesignSplitVerified ?? (async () => {}),
+    ),
+    markDesignSplitDirty: vi.fn(
+      overrides.markDesignSplitDirty ?? (async () => {}),
+    ),
   };
 }
 
