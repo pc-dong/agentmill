@@ -118,87 +118,93 @@ export function SchedulesPanel(props: {
 
         <section className="schedules-create">
           <h3>新建</h3>
-          <label className="field">
-            名称
-            <input value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label className="field">
-            频率预设
-            <select
-              value={preset}
-              onChange={(e) => {
-                const v = e.target.value;
-                setPreset(v);
-                if (v !== "__custom__") setCron(v);
+          <div className="schedules-form">
+            <label className="field">
+              名称
+              <input value={name} onChange={(e) => setName(e.target.value)} />
+            </label>
+            <label className="field">
+              频率预设
+              <select
+                value={preset}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setPreset(v);
+                  if (v !== "__custom__") setCron(v);
+                }}
+              >
+                {CRON_PRESETS.map((p) => (
+                  <option key={p.label} value={p.cron}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field field-wide">
+              Cron 表达式
+              <input
+                className="mono"
+                value={cron}
+                onChange={(e) => {
+                  setCron(e.target.value);
+                  setPreset(presetValueForCron(e.target.value.trim()));
+                }}
+                placeholder="分 时 日 月 周，例如 0 9 * * 1-5"
+                spellCheck={false}
+              />
+              <span className="meta">
+                例：<code>0 */2 * * *</code> 每 2 小时；
+                <code>30 8 * * 1-5</code> 工作日 08:30
+              </span>
+            </label>
+            <label className="field field-wide">
+              扫描关注点（可选）
+              <textarea
+                rows={2}
+                value={focusHint}
+                onChange={(e) => setFocusHint(e.target.value)}
+                placeholder="例如：支付相关服务、空指针、鉴权绕过…"
+              />
+            </label>
+            <label className="field field-narrow">
+              最多建卡数
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={maxDefects}
+                onChange={(e) => setMaxDefects(Number(e.target.value) || 10)}
+              />
+            </label>
+          </div>
+          <div className="schedules-create-footer">
+            <button
+              type="button"
+              disabled={busyId === "create"}
+              onClick={async () => {
+                setBusyId("create");
+                setError(null);
+                try {
+                  await api.createSchedule(props.boardId, {
+                    name: name.trim() || "代码缺陷扫描",
+                    cron: cron.trim(),
+                    config: {
+                      focusHint: focusHint.trim() || undefined,
+                      autoCreateTasks: true,
+                      maxDefects,
+                    },
+                  });
+                  await refresh();
+                } catch (e) {
+                  setError(String(e));
+                } finally {
+                  setBusyId(null);
+                }
               }}
             >
-              {CRON_PRESETS.map((p) => (
-                <option key={p.label} value={p.cron}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Cron 表达式
-            <input
-              value={cron}
-              onChange={(e) => {
-                setCron(e.target.value);
-                setPreset(presetValueForCron(e.target.value.trim()));
-              }}
-              placeholder="分 时 日 月 周，例如 0 9 * * 1-5"
-              spellCheck={false}
-            />
-            <span className="meta">
-              例：`0 */2 * * *` 每 2 小时；`30 8 * * 1-5` 工作日 08:30
-            </span>
-          </label>
-          <label className="field">
-            扫描关注点（可选）
-            <textarea
-              rows={2}
-              value={focusHint}
-              onChange={(e) => setFocusHint(e.target.value)}
-              placeholder="例如：支付相关服务、空指针、鉴权绕过…"
-            />
-          </label>
-          <label className="field">
-            最多建卡数
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={maxDefects}
-              onChange={(e) => setMaxDefects(Number(e.target.value) || 10)}
-            />
-          </label>
-          <button
-            type="button"
-            disabled={busyId === "create"}
-            onClick={async () => {
-              setBusyId("create");
-              setError(null);
-              try {
-                await api.createSchedule(props.boardId, {
-                  name: name.trim() || "代码缺陷扫描",
-                  cron: cron.trim(),
-                  config: {
-                    focusHint: focusHint.trim() || undefined,
-                    autoCreateTasks: true,
-                    maxDefects,
-                  },
-                });
-                await refresh();
-              } catch (e) {
-                setError(String(e));
-              } finally {
-                setBusyId(null);
-              }
-            }}
-          >
-            {busyId === "create" ? "创建中…" : "创建定时任务"}
-          </button>
+              {busyId === "create" ? "创建中…" : "创建定时任务"}
+            </button>
+          </div>
         </section>
 
         <section className="schedules-list">
