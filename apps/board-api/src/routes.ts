@@ -12,7 +12,7 @@ import {
 } from "@agentmill/domain";
 import type { BoardRepo } from "./repo.js";
 import type { SessionRepo } from "./sessions.js";
-import { listWorkspaceTree, readWorkspaceFile, readWorkspaceRaw } from "./workspaceFiles.js";
+import { listDirectoriesUnder, listWorkspaceTree, readWorkspaceFile, readWorkspaceRaw } from "./workspaceFiles.js";
 import { scanWorkspaceSkills } from "./workspaceSkills.js";
 
 const mentionRe = /@(Design|Split|Verify|Dev|Test|Review|BA)\s*Bot/i;
@@ -36,6 +36,14 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
 
   app.get("/boards", (c) => {
     return c.json(repo.listBoards());
+  });
+
+  /** Directory listing for the workspace picker (home-scoped). */
+  app.get("/dir-picker", (c) => {
+    const p = c.req.query("path") ?? "";
+    const result = listDirectoriesUnder(p);
+    if (!result.ok) return c.json({ error: result.error }, result.status);
+    return c.json(result);
   });
 
   app.get("/boards/:boardId", (c) => {

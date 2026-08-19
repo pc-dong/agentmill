@@ -10,6 +10,19 @@ import { SplitChat } from "./SplitChat";
 const OPEN_SPLIT_BLOCK =
   "请先结束拆分对齐会话（settle）后再拆分/校验";
 
+const DRAWER_WIDTH_KEY = "agentmill.drawerWidth";
+const DRAWER_MIN = 320;
+const DRAWER_MAX = 760;
+const DRAWER_DEFAULT = 400;
+
+function readDrawerWidth(): number {
+  const n = Number(localStorage.getItem(DRAWER_WIDTH_KEY));
+  if (Number.isFinite(n)) {
+    return Math.min(DRAWER_MAX, Math.max(DRAWER_MIN, n));
+  }
+  return DRAWER_DEFAULT;
+}
+
 type Employee = {
   id: string;
   role: string;
@@ -171,6 +184,46 @@ export function CardDrawer(props: {
   const [pipelineBusy, setPipelineBusy] = useState<
     "split" | "verify" | "done" | null
   >(null);
+  const [drawerWidth, setDrawerWidth] = useState<number>(readDrawerWidth);
+  const resizingRef = useRef(false);
+  const drawerWidthRef = useRef(drawerWidth);
+  drawerWidthRef.current = drawerWidth;
+  const detachResizeRef = useRef<(() => void) | null>(null);
+
+  // Drag the left edge of the drawer to resize it (persisted).
+  const startResize = () => {
+    if (resizingRef.current) return;
+    resizingRef.current = true;
+    const onMove = (e: MouseEvent) => {
+      const w = Math.min(
+        DRAWER_MAX,
+        Math.max(DRAWER_MIN, window.innerWidth - e.clientX),
+      );
+      setDrawerWidth(w);
+    };
+    const detach = () => {
+      resizingRef.current = false;
+      detachResizeRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", detach);
+      window.removeEventListener("keydown", onKey);
+      document.body.style.cursor = "";
+      localStorage.setItem(DRAWER_WIDTH_KEY, String(drawerWidthRef.current));
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") detach();
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", detach);
+    window.addEventListener("keydown", onKey);
+    document.body.style.cursor = "col-resize";
+    detachResizeRef.current = detach;
+  };
+
+  // Safety cleanup if the drawer unmounts mid-drag.
+  useEffect(() => {
+    return () => detachResizeRef.current?.();
+  }, []);
   const [pipelineNote, setPipelineNote] = useState<string | null>(null);
   const [pipelineTone, setPipelineTone] = useState<
     "info" | "wait" | "ok" | "err"
@@ -447,7 +500,14 @@ export function CardDrawer(props: {
 
   return (
     <>
-    <aside className="drawer">
+    <aside className="drawer" style={{ width: drawerWidth }}>
+      <div
+        className="drawer-resize-handle"
+        title="拖动调整宽度"
+        role="separator"
+        aria-orientation="vertical"
+        onMouseDown={startResize}
+      />
       <div className="drawer-toolbar">
         <button type="button" onClick={props.onClose}>
           关闭

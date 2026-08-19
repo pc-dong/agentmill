@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 export const PREVIEW_EXTENSIONS = new Set([
@@ -432,4 +433,62 @@ export function inferEpicDocsRoot(filePath: string): string | null {
   const n = filePath.replace(/\\/g, "/");
   const m = n.match(/^(docs\/epics\/[^/]+)/);
   return m?.[1] ?? null;
+}
+
+export type DirectoryPickerResult =
+  | {
+      ok: true;
+      path: string;
+      parent: string | null;
+      dirs: Array<{ name: string; path: string }>;
+    }
+  | { ok: false; error: string; status: 400 | 403 };
+
+/**
+ * List subdirectories of an absolute path for the workspace picker dialog.
+ * Scope: user home and the filesystem root only; hidden and node_modules-ish
+ * directories are skipped to keep the listing small.
+ */
+export function listDirectoriesUnder(absolutePath: string): DirectoryPickerResult {
+  const home = os.homedir();
+  const requested = path.resolve(absolutePath || home);
+  // Allowed roots: anywhere under home, or the fs root itself.
+  const underHome =
+    requested === home || requested.startsWith(home + path.sep);
+  if (!underHome && requested !== path.parse(requested).root) {
+    return {
+      ok: false,
+      error: "path must be under your home directory",
+      status: 403,
+    };
+  }
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(requested, { withFileTypes: true });
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+      status: 400,
+    };
+  }
+  const SKIP = new Set(["node_modules", "Library", "Application Support"]);
+  const dirs = entries
+    .filter(
+      (e) =>
+        e.isDirectory() &&
+        !e.name.startsWith(".") &&
+        !SKIP.has(e.name),
+    )
+    .map((e) => ({ name: e.name, path: path.join(requested, e.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return {
+    ok: true,
+    path: requested,
+    parent:
+      requested === path.parse(requested).root
+        ? null
+        : path.dirname(requested),
+    dirs,
+  };
 }

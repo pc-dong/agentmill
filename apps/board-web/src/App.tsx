@@ -32,6 +32,13 @@ export function App() {
   const [boardsLoaded, setBoardsLoaded] = useState(false);
   const [newBoardOpen, setNewBoardOpen] = useState(false);
   const [newBoardName, setNewBoardName] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerPath, setPickerPath] = useState("");
+  const [pickerParent, setPickerParent] = useState<string | null>(null);
+  const [pickerDirs, setPickerDirs] = useState<
+    Array<{ name: string; path: string }>
+  >([]);
+  const [pickerError, setPickerError] = useState<string | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
   const [selected, setSelected] = useState<Card | null>(null);
   const [workspacePath, setWorkspacePath] = useState(
@@ -80,6 +87,29 @@ export function App() {
     setNewBoardName("");
     await refreshBoards();
     switchBoard(board.id);
+  }
+
+  async function openPicker(initial: string) {
+    setPickerError(null);
+    setPickerOpen(true);
+    await browsePicker(initial || workspacePath);
+  }
+
+  async function browsePicker(target: string) {
+    try {
+      const r = await api.dirPicker(target);
+      setPickerPath(r.path);
+      setPickerParent(r.parent);
+      setPickerDirs(r.dirs);
+      setPickerError(null);
+    } catch (e) {
+      setPickerError(String(e));
+    }
+  }
+
+  function pickDirectory(path: string) {
+    setWorkspacePath(path);
+    setPickerOpen(false);
   }
 
   const epics = useMemo(
@@ -208,7 +238,7 @@ export function App() {
           </button>
           {newBoardOpen && (
             <span
-              style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
+              style={{ display: "inline-flex", gap: 6, alignItems: "center", position: "relative" }}
             >
               <input
                 placeholder="看板名称"
@@ -222,9 +252,60 @@ export function App() {
                 onChange={(e) => setWorkspacePath(e.target.value)}
                 style={{ width: 220 }}
               />
+              <button type="button" onClick={() => void openPicker(workspacePath)}>
+                浏览…
+              </button>
               <button type="button" onClick={() => void createBoard()}>
                 创建
               </button>
+              {pickerOpen && (
+                <div className="dir-picker">
+                  <div className="dir-picker-head">
+                    <button
+                      type="button"
+                      disabled={!pickerParent}
+                      onClick={() => pickerParent && void browsePicker(pickerParent)}
+                      title="上级目录"
+                    >
+                      ↑
+                    </button>
+                    <span className="dir-picker-path" title={pickerPath}>
+                      {pickerPath || "…"}
+                    </span>
+                    <button type="button" onClick={() => setPickerOpen(false)}>
+                      ✕
+                    </button>
+                  </div>
+                  {pickerError && (
+                    <p className="dir-picker-error">{pickerError}</p>
+                  )}
+                  <ul className="dir-picker-list">
+                    {pickerDirs.length === 0 && (
+                      <li className="dir-picker-empty">（无子目录）</li>
+                    )}
+                    {pickerDirs.map((d) => (
+                      <li key={d.path}>
+                        <button
+                          type="button"
+                          className="dir-picker-item"
+                          onClick={() => void browsePicker(d.path)}
+                        >
+                          📁 {d.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="dir-picker-foot">
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => pickDirectory(pickerPath)}
+                    >
+                      选择此目录
+                    </button>
+                  </div>
+                </div>
+              )}
             </span>
           )}
           {currentBoard && (

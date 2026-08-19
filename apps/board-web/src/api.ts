@@ -437,4 +437,11 @@ export const api = {
         source: string;
       }>;
     }>(fetch(`${base}/boards/${boardId}/workspace-skills`)),
+  dirPicker: (path: string) =>
+    json<{
+      ok: boolean;
+      path: string;
+      parent: string | null;
+      dirs: Array<{ name: string; path: string }>;
+    }>(fetch(`${base}/dir-picker?path=${encodeURIComponent(path)}`)),
 };
