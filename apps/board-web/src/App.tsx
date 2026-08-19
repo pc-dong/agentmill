@@ -264,6 +264,7 @@ export function App() {
           </select>
           <button
             type="button"
+            className="btn-primary"
             onClick={async () => {
               await api.createCard(boardId, {
                 type: "requirement",

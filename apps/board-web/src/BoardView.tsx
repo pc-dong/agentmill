@@ -22,6 +22,13 @@ const OCCUPANCY: Record<Card["type"], readonly string[]> = {
 
 const HUMAN_GATES = new Set(["design→done", "accept→done"]);
 
+const TYPE_LABELS: Record<string, string> = {
+  epic: "主题",
+  requirement: "需求",
+  design: "设计",
+  task: "任务",
+};
+
 function needsHumanGate(from: string, to: string): boolean {
   return HUMAN_GATES.has(`${from}→${to}`);
 }
@@ -243,8 +250,10 @@ export function BoardView(props: {
                     >
                       <div className="card-top">
                         <div className="meta">
-                          {c.type}
-                          {c.reworkCount > 0 ? ` · rework ${c.reworkCount}` : ""}
+                          <span className={`type-chip type-${c.type}`}>
+                            {TYPE_LABELS[c.type] ?? c.type}
+                          </span>
+                          {c.reworkCount > 0 ? `rework ${c.reworkCount}` : ""}
                           {c.frozen ? " · FROZEN" : ""}
                         </div>
                         <button
