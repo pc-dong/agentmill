@@ -446,33 +446,42 @@ export type DirectoryPickerResult =
 
 /**
  * List subdirectories of an absolute path for the workspace picker dialog.
- * Scope: user home and the filesystem root only; hidden and node_modules-ish
- * directories are skipped to keep the listing small.
+ * Any absolute path is browsable (boards legitimately use /tmp, /var/folders
+ * and home dirs; the worker already executes under arbitrary workspace paths).
+ * Hidden and node_modules-ish directories are skipped to keep listings small.
+ * When the requested path does not exist, walk up to the nearest existing
+ * ancestor so typed-but-uncreated workspace paths still open the picker.
  */
 export function listDirectoriesUnder(absolutePath: string): DirectoryPickerResult {
-  const home = os.homedir();
-  const requested = path.resolve(absolutePath || home);
-  // Allowed roots: anywhere under home, or the fs root itself.
-  const underHome =
-    requested === home || requested.startsWith(home + path.sep);
-  if (!underHome && requested !== path.parse(requested).root) {
-    return {
-      ok: false,
-      error: "path must be under your home directory",
-      status: 403,
-    };
-  }
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(requested, { withFileTypes: true });
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : String(e),
-      status: 400,
-    };
-  }
+  const fallback = os.homedir();
+  let requested = path.resolve(absolutePath || fallback);
+
   const SKIP = new Set(["node_modules", "Library", "Application Support"]);
+  const listAt = (dir: string): { entries: fs.Dirent[] } | null => {
+    try {
+      return { entries: fs.readdirSync(dir, { withFileTypes: true }) };
+    } catch {
+      return null;
+    }
+  };
+
+  let result = listAt(requested);
+  while (!result) {
+    const parent = path.dirname(requested);
+    if (parent === requested) {
+      // Nothing browsable on the whole path — last resort: home.
+      requested = fallback;
+      result = listAt(requested);
+      if (!result) {
+        return { ok: false, error: "cannot read any directory", status: 400 };
+      }
+      break;
+    }
+    requested = parent;
+    result = listAt(requested);
+  }
+
+  const entries = result.entries;
   const dirs = entries
     .filter(
       (e) =>
