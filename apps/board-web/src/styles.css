@@ -84,6 +84,85 @@ body { margin: 0; }
 }
 .toolbar-spacer { flex: 1 1 auto; }
 .board-config-row { padding-bottom: 8px; border-bottom: 1px solid #e7e5e4; }
+
+/* Workspace directory picker popover. */
+.dir-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 600;
+  width: 360px;
+  background: #fff;
+  border: 1px solid #e0dedb;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(28, 25, 23, 0.16);
+  padding: 8px;
+}
+.dir-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.dir-picker-head button {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #d6d3d1;
+  border-radius: 5px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dir-picker-head button:disabled { opacity: 0.4; cursor: default; }
+.dir-picker-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #57534e;
+}
+.dir-picker-error { color: #b91c1c; font-size: 12px; margin: 4px 0; }
+.dir-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow: auto;
+}
+.dir-picker-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+}
+.dir-picker-item:hover { background: #f5f5f4; }
+.dir-picker-empty { color: #a8a29e; font-size: 12px; padding: 8px; }
+.dir-picker-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #f0efee;
+}
+.dir-picker-foot button {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 5px;
+  border: 1px solid var(--am-accent);
+  background: var(--am-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dir-picker-foot button:hover { background: #115e59; }
 .board {
   display: grid;
   grid-template-columns: repeat(6, minmax(160px, 1fr));
@@ -460,9 +539,22 @@ body { margin: 0; }
 }
 .drawer {
   position: fixed; right: 0; top: 0; width: 400px; height: 100%;
+  z-index: 500;
   background: #fff; border-left: 1px solid #d6d3d1; padding: 16px;
+  box-shadow: -8px 0 24px rgba(28, 25, 23, 0.08);
   overflow: auto;
 }
+.drawer-resize-handle {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  margin-left: -19px;
+  cursor: col-resize;
+  z-index: 501;
+  transition: background 0.15s ease;
+}
+.drawer-resize-handle:hover { background: rgba(15, 118, 110, 0.35); }
 .drawer .field {
   display: flex;
   flex-direction: column;
