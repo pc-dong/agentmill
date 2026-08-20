@@ -1,0 +1,33 @@
+@startuml
+' C 端正式详情 — P-001-03 §7.5 / TECH §5.1 public detail
+
+title C 端正式详情（运行状态 + 模块投影）
+
+actor User
+participant "Client" as C
+participant "Public API" as API
+participant "ContentApplication" as App
+participant "读模型 (Repository)" as Repo
+
+User -> C: 打开内容页
+C -> API: GET /api-content/public/api/v1/contents/{uuid}
+API -> App: getPublishedDetail(uuid)
+App -> Repo: 查询聚合（基本信息+展示配置+未删模块）
+Repo --> App: Content 投影
+
+alt status != PUBLISHED
+  App --> API: 404 ContentNotFound（E-R-004）
+  API --> C: 统一下线页
+else status == PUBLISHED
+  App -> App: runtimeStatus = \nnow<startAt ? SCHEDULED :\nnow<=endAt ? RUNNING : EXPIRED
+  App --> API: 200 详情（三区投影 + runtimeStatus + summary）
+  API --> C: 渲染内容页
+end
+
+note right of App
+  模块按 sortOrder 升序投影；
+  载荷仅透传 URL 类字段，
+  不做富文本再加工
+end note
+
+@enduml

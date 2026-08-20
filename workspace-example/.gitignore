@@ -1,0 +1,7 @@
+# macOS
+.DS_Store
+
+# API 文档生成产物（用 docs/api-doc/generate_*_api.sh 重新导出）
+docs/api-doc/*.html
+docs/api-doc/*.json
+/tmp/

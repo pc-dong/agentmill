@@ -1,0 +1,40 @@
+@startuml
+' Epic 领域模型 — 复制到 docs/epics/<epic>/tech/domain.puml 后按实际聚合修改
+' 约定：只表达领域概念与关系，不画 Controller/UI
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+package "Content 示例聚合（请替换）" {
+  class Content <<aggregate root>> {
+    + id: Long
+    + uuid: UUID
+    + status: ContentStatus
+    + startAt: DateTime
+    + endAt: DateTime
+  }
+
+  class GlobalConfig {
+    + templateType: TemplateType
+    + subscriptionEnabled: boolean
+  }
+
+  class Module {
+    + uuid: UUID
+    + moduleType: ModuleType
+    + sortOrder: int
+  }
+
+  Content "1" *-- "1" GlobalConfig
+  Content "1" *-- "0..*" Module
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  OFFLINE
+}
+
+Content --> ContentStatus
+
+@enduml

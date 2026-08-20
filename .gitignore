@@ -6,3 +6,4 @@ dist/
 .superpowers/
 *.tsbuildinfo
 .pnpm-store/
+.DS_Store

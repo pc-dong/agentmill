@@ -1,0 +1,20 @@
+@startuml
+' 示例时序：发布活动 — 复制到 docs/epics/<epic>/tech/sequences/ 后改名改流程
+title 示例：发布内容
+
+actor Operator
+participant "Console API" as API
+participant "Application" as App
+participant "Domain" as Dom
+participant "MQ" as MQ
+participant "Notification" as Comm
+
+Operator -> API: POST /.../publish
+API -> App: publish(uuid)
+App -> Dom: 校验可发布 / 变更状态 PUBLISHED
+Dom --> App: ok
+App -> MQ: ContentPublished(uuid, ...)
+App --> API: 200
+MQ -> Comm: 创建/更新 subscription\n(subject, subjectId=uuid)
+
+@enduml

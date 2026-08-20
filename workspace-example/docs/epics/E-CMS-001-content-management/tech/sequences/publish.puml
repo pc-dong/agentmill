@@ -1,0 +1,37 @@
+@startuml
+' 发布（含订阅联动）— P-001-03 / TECH §5.1 publish / §5.2 ContentPublished
+
+title 发布内容（Console）
+
+actor Operator
+participant "Console UI" as UI
+participant "ContentController" as API
+participant "ContentApplication" as App
+participant "Content (Domain)" as Dom
+participant "MQ" as MQ
+participant "订阅域 Notification" as Sub
+
+Operator -> UI: 点击「发布」并确认
+UI -> API: POST /api-content/admin/api/v1/contents/{uuid}/publish
+API -> App: publish(uuid, operator)
+App -> Dom: 校验 status=DRAFT 且模块数>=1
+alt 校验失败
+  Dom --> App: ContentStatusInvalid / ConfigIncomplete
+  App --> API: 400 业务错误
+  API --> UI: 错误提示
+else 校验通过
+  Dom -> Dom: status -> PUBLISHED\n记录 published_by/at
+  Dom --> App: ok
+  App -> MQ: ContentPublished\n{contentUuid, subject=CONTENT,\nsubjectId=uuid, triggerPoint=ContentPublishedNotification}
+  App --> API: 200
+  API --> UI: 发布成功
+  MQ -> Sub: 消费事件
+  alt 同键存在软删行
+    Sub -> Sub: 恢复（deleted_at=null）并更新
+  else 不存在
+    Sub -> Sub: 新建订阅配置
+  end
+  Sub -> Sub: 向已订用户推送更新通知
+end
+
+@enduml

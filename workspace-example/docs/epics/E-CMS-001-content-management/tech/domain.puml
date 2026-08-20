@@ -1,0 +1,75 @@
+@startuml
+' E-CMS-001 内容管理 — 领域模型（示例）
+' 约定：只表达领域概念与关系，不画 Controller/UI；以本文件为唯一编辑源
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+package "Content 聚合" {
+  class Content <<aggregate root>> {
+    + id: Long
+    + uuid: UUID
+    + title: String
+    + contentType: ContentType
+    + contentTemplate: ContentTemplate
+    + startAt: DateTime
+    + endAt: DateTime
+    + summary: String?
+    + status: ContentStatus
+  }
+
+  class ContentGlobalConfig {
+    + contentTemplate: ContentTemplate
+    + displayConfig: JSON
+  }
+
+  class ContentModule {
+    + uuid: UUID
+    + moduleType: ModuleType
+    + moduleTemplate: String
+    + sortOrder: int
+    + payload: JSON
+  }
+
+  Content "1" *-- "1" ContentGlobalConfig
+  Content "1" *-- "0..20" ContentModule
+}
+
+package "跨域引用" {
+  class SubscriptionConfig <<订阅域维护>> {
+    + subject: String
+    + relatedUuid: UUID
+    + triggerPoint: String
+  }
+  Content ..> SubscriptionConfig : 发布事件后\n由订阅域创建/恢复
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  OFFLINE
+}
+
+enum ContentType {
+  ANNOUNCEMENT
+  HELP
+}
+
+enum ContentRuntimeStatus {
+  SCHEDULED
+  RUNNING
+  EXPIRED
+}
+
+Content --> ContentStatus
+Content --> ContentType
+
+note right of ContentModule
+  多态 payload：
+  RICH_TEXT → RichTextPayload
+  IMAGE     → ImagePayload
+  VIDEO     → VideoPayload
+  新类型须先登记 shared-context §3（E-R-003）
+end note
+
+@enduml
