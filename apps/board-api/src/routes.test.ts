@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -1066,5 +1067,155 @@ describe("routes", () => {
       { method: "POST" },
     );
     expect(res.status).toBe(404);
+  });
+
+  it("workspace-init previews and copies template without replacing files", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-wsinit-"));
+    tmpFiles.push(root);
+    const tpl = path.join(root, "workspace-example");
+    fs.mkdirSync(path.join(tpl, "docs"), { recursive: true });
+    fs.mkdirSync(path.join(tpl, ".agents/skills/demo"), { recursive: true });
+    fs.writeFileSync(path.join(tpl, "docs/README.md"), "# tpl");
+    fs.writeFileSync(path.join(tpl, ".agents/skills/demo/SKILL.md"), "skill");
+    fs.writeFileSync(path.join(tpl, ".DS_Store"), "junk");
+    process.env.AM_WORKSPACE_TEMPLATE = tpl;
+
+    const ws = path.join(root, "ws");
+    fs.mkdirSync(path.join(ws, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(ws, "docs/README.md"), "# user keeps this");
+
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "W", workspacePath: ws });
+
+    const preview = await app.request(
+      `http://localhost/boards/${board.id}/workspace-init`,
+    );
+    expect(preview.status).toBe(200);
+    const pbody = await preview.json();
+    expect(pbody.totalFiles).toBe(2);
+    expect(pbody.existingFiles).toBe(1);
+    expect(pbody.newFiles).toBe(1);
+
+    const apply = await app.request(
+      `http://localhost/boards/${board.id}/workspace-init`,
+      { method: "POST" },
+    );
+    expect(apply.status).toBe(200);
+    const abody = await apply.json();
+    expect(abody.copied).toBe(1);
+    expect(abody.skipped).toBe(1);
+
+    // User file untouched, new file present, noise not copied.
+    expect(fs.readFileSync(path.join(ws, "docs/README.md"), "utf8")).toBe(
+      "# user keeps this",
+    );
+    expect(
+      fs.readFileSync(path.join(ws, ".agents/skills/demo/SKILL.md"), "utf8"),
+    ).toBe("skill");
+    expect(fs.existsSync(path.join(ws, ".DS_Store"))).toBe(false);
+
+    delete process.env.AM_WORKSPACE_TEMPLATE;
+  });
+
+  it("workspace-init returns 403 needsAuthorization for non-writable workspace", async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-ws-ro-"));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-wsinit-ro-"));
+    tmpFiles.push(ws, root);
+    const tpl = path.join(root, "workspace-example");
+    fs.mkdirSync(path.join(tpl, "docs"), { recursive: true });
+    fs.mkdirSync(path.join(tpl, ".agents"), { recursive: true });
+    fs.writeFileSync(path.join(tpl, "docs/README.md"), "# tpl");
+    fs.writeFileSync(path.join(tpl, ".agents/SKILL.md"), "skill");
+    process.env.AM_WORKSPACE_TEMPLATE = tpl;
+    fs.chmodSync(ws, 0o555);
+
+    try {
+      const { app, repo } = appWithRepo();
+      const board = repo.createBoard({ name: "RO", workspacePath: ws });
+      const res = await app.request(
+        `http://localhost/boards/${board.id}/workspace-init`,
+        { method: "POST" },
+      );
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as {
+        error: string;
+        needsAuthorization: boolean;
+      };
+      expect(body.needsAuthorization).toBe(true);
+      expect(body.error).toContain("不可写");
+      expect(fs.readdirSync(ws)).toEqual([]);
+    } finally {
+      fs.chmodSync(ws, 0o755);
+      delete process.env.AM_WORKSPACE_TEMPLATE;
+    }
+  });
+
+  it("workspace-init routes through broker for non-writable workspaces", async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-ws-broker-"));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-wsinit-bk-"));
+    tmpFiles.push(ws, root);
+    const tpl = path.join(root, "workspace-example");
+    fs.mkdirSync(path.join(tpl, "docs"), { recursive: true });
+    fs.mkdirSync(path.join(tpl, ".agents"), { recursive: true });
+    fs.writeFileSync(path.join(tpl, "docs/README.md"), "# tpl");
+    fs.writeFileSync(path.join(tpl, ".agents/SKILL.md"), "skill");
+    process.env.AM_WORKSPACE_TEMPLATE = tpl;
+    fs.chmodSync(ws, 0o555);
+
+    // Stub broker that reports a successful copy.
+    const broker = http.createServer((req, res) => {
+      let data = "";
+      req.on("data", (chunk) => (data += chunk));
+      req.on("end", () => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            ok: true,
+            templatePath: tpl,
+            totalFiles: 2,
+            copied: 2,
+            skipped: 0,
+            copiedSample: ["docs/README.md", ".agents/SKILL.md"],
+          }),
+        );
+      });
+    });
+    await new Promise<void>((resolve) => broker.listen(0, "127.0.0.1", resolve));
+    const addr = broker.address();
+    const port = typeof addr === "object" && addr ? addr.port : 0;
+    process.env.AM_WORKSPACE_INIT_BROKER = `http://127.0.0.1:${port}`;
+
+    try {
+      const { app, repo } = appWithRepo();
+      const board = repo.createBoard({ name: "BK", workspacePath: ws });
+      const res = await app.request(
+        `http://localhost/boards/${board.id}/workspace-init`,
+        { method: "POST" },
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { copied: number; via: string };
+      expect(body.copied).toBe(2);
+      expect(body.via).toBe("broker");
+    } finally {
+      broker.close();
+      fs.chmodSync(ws, 0o755);
+      delete process.env.AM_WORKSPACE_TEMPLATE;
+      delete process.env.AM_WORKSPACE_INIT_BROKER;
+    }
+  });
+
+  it("workspace-init returns 503 when template cannot be located", async () => {
+    const prev = process.env.AM_WORKSPACE_TEMPLATE;
+    process.env.AM_WORKSPACE_TEMPLATE = "/definitely/not/here";
+    const { app, repo } = appWithRepo();
+    const board = repo.createBoard({ name: "W", workspacePath: "/tmp/w" });
+    const res = await app.request(
+      `http://localhost/boards/${board.id}/workspace-init`,
+    );
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(String(body.error)).toContain("workspace-example");
+    if (prev === undefined) delete process.env.AM_WORKSPACE_TEMPLATE;
+    else process.env.AM_WORKSPACE_TEMPLATE = prev;
   });
 });

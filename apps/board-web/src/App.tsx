@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type BoardSummary, type Card } from "./api";
+import {
+  api,
+  WorkspaceInitAuthError,
+  type BoardSummary,
+  type Card,
+  type WorkspaceInitPreview,
+} from "./api";
 import { BoardView } from "./BoardView";
 import { CardDrawer } from "./CardDrawer";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -50,6 +56,16 @@ export function App() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [schedulesOpen, setSchedulesOpen] = useState(false);
+  const [initConfirm, setInitConfirm] = useState<WorkspaceInitPreview | null>(
+    null,
+  );
+  const [initBlocked, setInitBlocked] = useState<{
+    workspacePath: string;
+    templatePath: string;
+    newFiles: number;
+  } | null>(null);
+  const [initBusy, setInitBusy] = useState(false);
+  const [initNotice, setInitNotice] = useState<string | null>(null);
 
   const refreshBoards = useCallback(async () => {
     const list = await api.listBoards();
@@ -176,6 +192,75 @@ export function App() {
       setDeleteError(String(e));
     } finally {
       setDeleting(false);
+    }
+  }
+
+  /** Per-directory grant command shown when the sandbox denies writes. */
+  function grantCommand(
+    workspacePath: string,
+    templatePath: string,
+  ): string {
+    return `cp -Rn "${templatePath}/." "${workspacePath}/"`;
+  }
+
+  /** Preview workspace state; prompt when files already exist, else copy. */
+  async function startWorkspaceInit() {
+    if (!boardId || !currentBoard) return;
+    setInitBusy(true);
+    setInitNotice(null);
+    try {
+      const preview = await api.previewWorkspaceInit(boardId);
+      if (preview.existingFiles > 0) {
+        // Existing files are never replaced; ask before copying the missing ones.
+        setInitConfirm(preview);
+      } else {
+        // Nothing exists yet — copy directly. If the API cannot write here it
+        // automatically routes through the workspace-init broker.
+        await runWorkspaceInit();
+      }
+    } catch (e) {
+      setInitNotice(
+        `Workspace 初始化失败：${e instanceof Error ? e.message : String(e)}`,
+      );
+    } finally {
+      setInitBusy(false);
+    }
+  }
+
+  /** Copy missing template files; existing files are never replaced. */
+  async function runWorkspaceInit() {
+    if (!boardId || !currentBoard) return;
+    setInitBusy(true);
+    try {
+      const r = await api.applyWorkspaceInit(boardId);
+      const parts = [`新增 ${r.copied} 个文件`];
+      if (r.skipped > 0) parts.push(`跳过已存在 ${r.skipped} 个（未替换）`);
+      setInitNotice(
+        `Workspace 初始化完成：${parts.join("，")}${
+          r.via === "broker" ? "（经授权代理动态纳入可写范围）" : ""
+        }（模版：${r.templatePath}）`,
+      );
+    } catch (e) {
+      if (
+        e instanceof WorkspaceInitAuthError &&
+        e.needsAuthorization
+      ) {
+        const tpl = await api
+          .previewWorkspaceInit(boardId)
+          .then((p) => p.templatePath)
+          .catch(() => "<模版目录>");
+        setInitBlocked({
+          workspacePath: currentBoard.workspacePath,
+          templatePath: tpl,
+          newFiles: -1,
+        });
+      } else {
+        setInitNotice(
+          `Workspace 初始化失败：${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    } finally {
+      setInitBusy(false);
     }
   }
 
@@ -317,6 +402,14 @@ export function App() {
             </span>
           )}
           <span className="toolbar-spacer" />
+          <button
+            type="button"
+            disabled={initBusy || !boardId}
+            title="将 workspace-example 模版（docs/.agents/skills 等）复制到当前 workspace；已存在文件不会被替换"
+            onClick={() => void startWorkspaceInit()}
+          >
+            {initBusy ? "初始化中…" : "初始化 Workspace"}
+          </button>
           <button type="button" onClick={() => refresh()}>
             刷新
           </button>
@@ -449,6 +542,47 @@ export function App() {
             setPendingDelete(selected);
           }}
         />
+      )}
+      {initBlocked && (
+        <ConfirmDialog
+          title="Workspace 目录不在 API 可写范围"
+          message={`该目录尚未纳入可写范围，且初始化代理（pnpm run init-broker）当前不可用。请让 agent 启动初始化代理，此后新 workspace 会自动纳入；或自行在终端运行（不会覆盖已有文件）：${grantCommand(
+            initBlocked.workspacePath,
+            initBlocked.templatePath,
+          )}`}
+          confirmLabel="知道了"
+          cancelLabel="关闭"
+          onCancel={() => setInitBlocked(null)}
+          onConfirm={() => setInitBlocked(null)}
+        />
+      )}
+      {initConfirm && (
+        <ConfirmDialog
+          title="Workspace 已存在部分模版文件"
+          message={`当前 workspace 中已有 ${initConfirm.existingFiles} 个同名文件（如 ${initConfirm.existingSample
+            .slice(0, 3)
+            .join("、")}）。继续初始化只会复制缺失的 ${initConfirm.newFiles} 个文件，已存在文件不会被替换。是否继续？`}
+          confirmLabel={`继续（复制缺失 ${initConfirm.newFiles} 个）`}
+          busy={initBusy}
+          onCancel={() => {
+            if (!initBusy) setInitConfirm(null);
+          }}
+          onConfirm={() => {
+            void runWorkspaceInit().then(() => setInitConfirm(null));
+          }}
+        />
+      )}
+      {initNotice && (
+        <p className="board-notice" role="status">
+          {initNotice}
+          <button
+            type="button"
+            className="linkish linkish-neutral"
+            onClick={() => setInitNotice(null)}
+          >
+            关闭
+          </button>
+        </p>
       )}
       {pendingDelete && (
         <ConfirmDialog

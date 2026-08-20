@@ -457,6 +457,22 @@ body { margin: 0; }
   cursor: pointer;
   font: inherit;
 }
+.board-notice {
+  margin: 0;
+  padding: 8px 10px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  color: #15803d;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+.linkish.linkish-neutral {
+  color: #15803d;
+}
 .column-drop-target {
   outline: 2px dashed #0f766e;
   background: #f0fdfa;

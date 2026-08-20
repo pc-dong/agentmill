@@ -108,6 +108,34 @@ export type BoardSummary = {
   createdAt: string;
 };
 
+export type WorkspaceInitPreview = {
+  templatePath: string;
+  totalFiles: number;
+  newFiles: number;
+  existingFiles: number;
+  existingSample: string[];
+  /** false → the API process may not write this workspace (needs a grant). */
+  writable: boolean;
+};
+
+export type WorkspaceInitResult = {
+  templatePath: string;
+  totalFiles: number;
+  copied: number;
+  skipped: number;
+  copiedSample: string[];
+  /** Set when the copy was performed by the workspace-init broker. */
+  via?: "broker";
+};
+
+export class WorkspaceInitAuthError extends Error {
+  needsAuthorization: boolean;
+  constructor(message: string, needsAuthorization: boolean) {
+    super(message);
+    this.needsAuthorization = needsAuthorization;
+  }
+}
+
 export const api = {
   listBoards: () => json<BoardSummary[]>(fetch(`${base}/boards`)),
   createBoard: (name: string, workspacePath: string) =>
@@ -437,6 +465,26 @@ export const api = {
         source: string;
       }>;
     }>(fetch(`${base}/boards/${boardId}/workspace-skills`)),
+  previewWorkspaceInit: (boardId: string) =>
+    json<WorkspaceInitPreview>(
+      fetch(`${base}/boards/${boardId}/workspace-init`),
+    ),
+  applyWorkspaceInit: (boardId: string) =>
+    fetch(`${base}/boards/${boardId}/workspace-init`, { method: "POST" }).then(
+      async (res) => {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          needsAuthorization?: boolean;
+        };
+        if (!res.ok) {
+          throw new WorkspaceInitAuthError(
+            body.error ?? res.statusText,
+            Boolean(body.needsAuthorization),
+          );
+        }
+        return body as WorkspaceInitResult;
+      },
+    ),
   dirPicker: (path: string) =>
     json<{
       ok: boolean;

@@ -14,6 +14,12 @@ import type { BoardRepo } from "./repo.js";
 import type { SessionRepo } from "./sessions.js";
 import { listDirectoriesUnder, listWorkspaceTree, readWorkspaceFile, readWorkspaceRaw } from "./workspaceFiles.js";
 import { scanWorkspaceSkills } from "./workspaceSkills.js";
+import {
+  applyWorkspaceInit,
+  locateWorkspaceTemplate,
+  previewWorkspaceInit,
+} from "./workspaceInit.js";
+import { tryBrokerInit } from "./workspaceInitBroker.js";
 
 const mentionRe = /@(Design|Split|Verify|Dev|Test|Review|BA)\s*Bot/i;
 
@@ -115,6 +121,69 @@ export function createApp(repo: BoardRepo, sessions: SessionRepo) {
     if (!board) return c.json({ error: "not found" }, 404);
     const skills = scanWorkspaceSkills(board.workspacePath);
     return c.json({ skills });
+  });
+
+  /** Dry-run of workspace init: how many template files are new vs existing. */
+  app.get("/boards/:boardId/workspace-init", (c) => {
+    const board = repo.getBoard(c.req.param("boardId"));
+    if (!board) return c.json({ error: "not found" }, 404);
+    const templateRoot = locateWorkspaceTemplate();
+    if (!templateRoot) {
+      return c.json(
+        {
+          error:
+            "未找到 workspace-example 模版目录（可用 AM_WORKSPACE_TEMPLATE 环境变量指定）",
+        },
+        503,
+      );
+    }
+    const result = previewWorkspaceInit(board.workspacePath, templateRoot);
+    if (!result.ok) return c.json({ error: result.error }, result.status);
+    return c.json(result);
+  });
+
+  /** Copy template files into the workspace; existing files are never replaced. */
+  app.post("/boards/:boardId/workspace-init", async (c) => {
+    const board = repo.getBoard(c.req.param("boardId"));
+    if (!board) return c.json({ error: "not found" }, 404);
+    const templateRoot = locateWorkspaceTemplate();
+    if (!templateRoot) {
+      return c.json(
+        {
+          error:
+            "未找到 workspace-example 模版目录（可用 AM_WORKSPACE_TEMPLATE 环境变量指定）",
+        },
+        503,
+      );
+    }
+    const result = applyWorkspaceInit(board.workspacePath, templateRoot);
+    if (!result.ok) {
+      // Least-privilege fallback: dynamically route the copy through the
+      // workspace-init broker so a NEWLY registered workspace becomes
+      // writable without escalating the API process itself.
+      if (result.needsAuthorization) {
+        const viaBroker = await tryBrokerInit(
+          board.workspacePath,
+          templateRoot,
+        );
+        if (viaBroker.ok) return c.json(viaBroker);
+        return c.json(
+          {
+            error: viaBroker.error,
+            needsAuthorization: true,
+          },
+          403,
+        );
+      }
+      return c.json(
+        {
+          error: result.error,
+          needsAuthorization: result.needsAuthorization ?? false,
+        },
+        result.status,
+      );
+    }
+    return c.json(result);
   });
 
   app.get("/boards/:boardId/cards", (c) => {

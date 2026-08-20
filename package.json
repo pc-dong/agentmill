@@ -7,6 +7,7 @@
     "build": "pnpm -r build",
     "dev:api": "pnpm --filter @agentmill/board-api dev",
     "dev:web": "pnpm --filter @agentmill/board-web dev",
-    "dev:worker": "pnpm --filter @agentmill/worker dev"
+    "dev:worker": "pnpm --filter @agentmill/worker dev",
+    "init-broker": "node scripts/workspace-init-broker.mjs"
   }
 }
