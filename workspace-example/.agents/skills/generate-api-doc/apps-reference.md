@@ -4,7 +4,7 @@
 
 事实源：各 app 的 `application-LOCAL.properties` 与对应 `docs/api-doc/generate_*_api.sh`；表与脚本漂移时以文件为准并回填本表。
 
-后端模块根目录：`<backend-repo>/modules/`（按项目实际路径替换，如 `demo-backend-service/modules/`）  
+后端模块根目录：`<backend-repo>/modules/`（按项目实际路径替换，如 `<my-backend>/modules/`）  
 脚本目录：`docs/api-doc/`（工作区根，不在后端仓内）
 
 ## Local HTML (`generate_*_api.sh`)
@@ -13,8 +13,8 @@
 
 | App key | Gradle module | LOCAL port | api-docs path | Script | Notes |
 |---------|---------------|------------|---------------|--------|-------|
-| user | `demo-user-app` | 8080 | `/api-user/v3/api-docs` | `generate_user_api.sh` | 示例行 |
-| order | `demo-order-app` | 8081 | `/api-order/v3/api-docs` | `generate_order_api.sh` | 示例行 |
+| user | `<app>-app`（按项目实际模块名） | `<port>` | `<gateway>/v3/api-docs`（按项目实际） | `generate_user_api.sh` | 示例行 |
+| order | `<app>-app`（按项目实际模块名） | `<port>` | `<gateway>/v3/api-docs`（按项目实际） | `generate_order_api.sh` | 示例行 |
 
 约定：
 

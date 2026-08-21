@@ -23,7 +23,7 @@ description: >-
 | doc-grilling | [`doc-grilling/SKILL.md`](doc-grilling/SKILL.md) | B1/C1/D1 提问与 Phase 门禁 |
 | epic-author | [`epic-author/SKILL.md`](epic-author/SKILL.md) | Phase 0–1 Epic + shared-context |
 | prd-author | [`prd-author/SKILL.md`](prd-author/SKILL.md) | Phase 2 PRD |
-| frontend-prototype | [`frontend-prototype/SKILL.md`](frontend-prototype/SKILL.md) | Epic/PRD 可选：Console stub 原型 |
+| frontend-prototype | [`frontend-prototype/SKILL.md`](frontend-prototype/SKILL.md) | Epic/PRD 可选：前端 stub 原型（结构按项目实际） |
 | tech-design-author | [`tech-design-author/SKILL.md`](tech-design-author/SKILL.md) | Phase 3–8 全量 TECH + **`TECH-DESIGN-delta-v*`** 迭代增量 + `tech/` |
 | backend-prototype | [`backend-prototype/SKILL.md`](backend-prototype/SKILL.md) | TECH 可选：仅领域数据结构+UseCase 接口 / Controller+DTO stub+SpringDoc（无 Impl） |
 | tech-verification | [`tech-verification/SKILL.md`](tech-verification/SKILL.md) | V-DOMAIN / V-DB / V-API / V-SEQ / Ready 总检 |
@@ -36,9 +36,9 @@ description: >-
 2. 事实先查仓库 / 模版 / global。  
 3. 每 Phase（或子 skill 段落）结束 → **doc-grilling D1**，B1 清空后再进下一段。  
 4. TECH 的 domain/db/api/seq 后 → **tech-verification** 对应 V-*。  
-5. 冲突：global > epic shared-context > PRD；**API 字段级契约：SpringController / 生成 HTML > TECH §5 列表**（回写列表）。全量 **TECH + `tech/` > `TECH-DESIGN-delta-v*`**。**不再**以 `tech/openapi/*.yaml` 为权威。  
+5. 冲突：global > epic shared-context > PRD；**API 字段级契约：API 接口（+ SpringDoc）/ 生成 HTML > TECH §5 列表**（回写列表）。全量 **TECH + `tech/` > `TECH-DESIGN-delta-v*`**。**不再**以 `tech/openapi/*.yaml` 为权威。  
 6. **默认不写业务实现代码**，止于文档 Ready。  
-7. **例外**：用户明确触发（或 Phase 内确认）**frontend-prototype** / **backend-prototype** 时，允许其 skill 约定范围内的原型代码（stub UI / **仅**领域数据结构 + UseCase 接口 / Controller+DTO 签名 + SpringDoc）。**禁止** UseCase Impl、Repository、MyBatis、Liquibase、完整业务（除非用户另要求「正式实现」）。
+7. **例外**：用户明确触发（或 Phase 内确认）**frontend-prototype** / **backend-prototype** 时，允许其 skill 约定范围内的原型代码（stub UI / **仅**领域实体 + UseCase 接口 / API 接口 + DTO + SpringDoc 注解）。**禁止** UseCase Impl、Repository、ORM Mapper、迁移脚本、完整业务（除非用户另要求「正式实现」）。
 
 ## 进度清单
 

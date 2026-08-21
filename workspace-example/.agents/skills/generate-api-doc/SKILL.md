@@ -8,7 +8,7 @@ description: >-
 
 # Generate API Doc (local SpringDoc → HTML)
 
-Generate interface docs by scoping SpringDoc paths in `application-LOCAL.properties`, ensuring the local app is up, then running the matching shell under **工作区根** `docs/api-doc/`（与 Epic/PRD 同仓，不在 `demo-backend-service` 内）。
+Generate interface docs by scoping SpringDoc paths in `application-LOCAL.properties`, ensuring the local app is up, then running the matching shell under **工作区根** `docs/api-doc/`（与 Epic/PRD 同仓，不在后端仓内）。
 
 ## Defaults (do not change unless user overrides)
 
@@ -36,17 +36,17 @@ Ask if missing:
 | Input | Example |
 |-------|---------|
 | App key | `<app>`（登记于 apps-reference.md，示例：`user`、`order`） |
-| `springdoc.paths-to-match` | `/api-<app>/api/v1/<resource>/**`（示例：`/api-user/api/v1/users/**`） |
+| `springdoc.paths-to-match` | `/api-<app>/api/v1/<resource>/**`（网关前缀按项目实际，示例：`/api-user/api/v1/users/**`） |
 | `springdoc.paths-to-exclude` | empty, or comma-separated paths |
-| `context` filename prefix | `<context>-` → `demo-<app>-<context>api-YYYYMMDD.html`（示例：`profile-` → `demo-user-profile-api-YYYYMMDD.html`） |
+| `context` filename prefix | `<context>-` → `<app>-<context>api-YYYYMMDD.html`（精确命名模式按脚本实际，示例：`profile-`） |
 
 Resolve Gradle module, port, api-docs URL, and script from [apps-reference.md](apps-reference.md). If the app has no local `*_api.sh`, stop and tell the user.
 
 ### 2. Update LOCAL SpringDoc scope
 
-Edit only that app's (under `demo-backend-service`):
+Edit only that app's (under `<backend-repo>` 按项目实际):
 
-`demo-backend-service/modules/demo-<app>-app/src/main/resources/application-LOCAL.properties`
+`<backend-repo>/modules/<app>-app/src/main/resources/application-LOCAL.properties`
 
 Set (uncomment/adjust; leave historical commented examples alone when possible):
 
@@ -73,10 +73,10 @@ curl -sf -o /dev/null "http://localhost:<port><api-docs-path>"
 | Fail / connection refused | Start app (below), wait until probe succeeds |
 | OK but paths were just changed | **Restart** the running process, then re-probe (SpringDoc filters load at startup) |
 
-Start (from `demo-backend-service`, LOCAL profile as used for local boot):
+Start (from `<backend-repo>` 按项目实际，LOCAL profile as used for local boot):
 
 ```bash
-./gradlew :demo-<app>-app:bootRun
+./gradlew :<app>-app:bootRun
 ```
 
 Run bootRun in background; poll the api-docs URL until HTTP 200 or timeout (~3–5 min cold start). If boot fails (DB/Compose/credentials), surface the error and stop—do not invent a fake OpenAPI file.
@@ -90,7 +90,7 @@ chmod +x generate_<app>_api.sh   # if needed
 ```
 
 - Requires Node tools used by the scripts (`npx @redocly/cli`).
-- Outputs land in `docs/api-doc/` as `demo-<app>-<context>api-YYYYMMDD.html` (exact pattern varies by script).
+- Outputs land in `docs/api-doc/` as `<app>-<context>api-YYYYMMDD.html` (exact naming pattern varies by script).
 - **Do not** generate PDF (`openapi2pdf` has been removed from these scripts).
 
 ### 5. Report

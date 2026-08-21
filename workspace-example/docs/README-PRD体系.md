@@ -12,7 +12,7 @@
 | 共享上下文 | 术语、权限码、业务对象、权限原则、跨 PRD 约束（单一事实源） | `docs/epics/<epic-id>-<slug>/shared-context.md` |
 | PRD | 某一子场景的可实现规格（字段 / 规则 / AC） | `docs/epics/<epic-id>-<slug>/prds/<prd-id>-<slug>.md` |
 | Stories 附录（可选） | 过大 PRD 的实现切片；**不新增业务规则** | `docs/epics/<epic-id>-<slug>/prds/<prd-id>-stories.md` |
-| 技术方案（Epic 级） | 领域模型、表、API 列表、时序、复用上下文；字段级 HTTP 契约见 SpringController / api-doc HTML | `docs/epics/<epic-id>-<slug>/TECH-DESIGN.md` + `tech/`；**迭代变更**见同目录 `TECH-DESIGN-delta-v{版本}-{slug}.md` |
+| 技术方案（Epic 级） | 领域模型、表、API 列表、时序、复用上下文；字段级 HTTP 契约见 API 接口 / api-doc HTML | `docs/epics/<epic-id>-<slug>/TECH-DESIGN.md` + `tech/`；**迭代变更**见同目录 `TECH-DESIGN-delta-v{版本}-{slug}.md` |
 
 模版：
 
@@ -78,7 +78,7 @@ docs/
 4. 原型与文档冲突 → 业务规则与 AC 以 PRD 为准
 5. `shared-context.md` 与 PRD 共享定义冲突 → **停止实现**，在计划中记录冲突
 6. 表结构 / API path / 时序 / 复用方式 → **以 `TECH-DESIGN.md` + `tech/` 为准**（不得在技术方案中重定义业务枚举语义）
-7. API 列表（§5）与 **SpringController / 生成 HTML** 冲突 → **以 Controller / HTML 为准**，并回写 API 列表（**不以** `tech/openapi/*.yaml` 为准）
+7. API 列表（§5）与 **API 接口 / 生成 HTML** 冲突 → **以接口 / HTML 为准**，并回写 API 列表（**不以** `tech/openapi/*.yaml` 为准）
 
 ## 5. 人侧工作流
 
@@ -113,7 +113,7 @@ docs/
 3. 目标 `EPIC.md`（目标、旅程、边界、PRD 索引；可选前端原型 §0.2）
 4. 同目录 `shared-context.md`（本 Epic 共享事实源）
 5. 目标 PRD 全文
-6. 实现时：同目录 `TECH-DESIGN.md` + 所需 `tech/` 附件（领域图 / DDL / 时序）+ §7 指向的 api-doc HTML / SpringController；若任务属某迭代，先读对应 `TECH-DESIGN-delta-v*`
+6. 实现时：同目录 `TECH-DESIGN.md` + 所需 `tech/` 附件（领域图 / DDL / 时序）+ §7 指向的 api-doc HTML / API 接口；若任务属某迭代，先读对应 `TECH-DESIGN-delta-v*`
 7. 仅当声明时：`*-stories.md`、前端原型分支、相关系统事实文档
 8. 默认不读同 Epic 下其他 PRD（除非本 PRD 显式依赖 `P-xxx`）
 
@@ -142,7 +142,7 @@ docs/
 - [ ] `TECH-DESIGN.md` 存在，Tech ID 与 Epic 对齐
 - [ ] `tech/domain.puml`、表设计、API 列表、主时序齐全；§7 原型契约已填或标明未做
 - [ ] §相关上下文写明复用能力与依赖
-- [ ] 若有接口原型：API 列表与 SpringController / HTML path 一致
+- [ ] 若有接口原型：API 列表与 API 接口 / HTML path 一致
 - [ ] 若有迭代增量：`TECH-DESIGN-delta-v*` 已在全量 §0.2 索引，且差集已合并进全量
 - [ ] 未把业务规则从 PRD 挪到技术方案「另起一套」
 - [ ] 领域/表/API/时序曾按 `epic-prd-tech-design-workflow` 的 V-* 校验，缺口已关闭或写入 OPEN 决议

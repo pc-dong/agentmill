@@ -482,13 +482,13 @@ AC-PERM-003：越权访问必须被拒绝，并返回统一错误结果。
 
 ## 14. 原型引用说明
 
-> Console 交互原型优先落在 `demo-console-frontend` 分支（见 Epic §0.2）；静态 HTML 仅作补充。
+> 交互原型优先落在前端仓分支（仓库名见 Epic §0.2，按项目实际）；静态 HTML 仅作补充。
 
 本需求关联的前端原型为：
 
 | 项 | 值 |
 |----|-----|
-| 仓库 / 分支 | `demo-console-frontend` / `feature/<卡号>-…`（或「未做」） |
+| 仓库 / 分支 | 前端仓（按项目实际）/ `feature/<卡号>-…`（或「未做」） |
 | 本 PRD 相关 path | `src/...` |
 | 启动 | `npm run dev`（+ auth-mock 若适用） |
 | 静态 HTML / 链接（可选） | `<path 或 URL>` |

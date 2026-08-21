@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: <Epic> Console API — Tech T-xxx
   description: |
-    DEPRECATED: 勿再维护本文件。契约请用 SpringController + generate-api-doc HTML。
+    DEPRECATED: 勿再维护本文件。契约请用 API 接口 + SpringDoc / generate-api-doc HTML。
     Console / Backoffice 边界 OpenAPI 骨架（历史模版残留）。
     关联 Epic：E-xxx；覆盖 PRD 见 TECH-DESIGN.md。
     业务规则以 PRD + shared-context 为准。

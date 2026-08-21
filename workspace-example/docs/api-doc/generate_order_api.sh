@@ -7,6 +7,6 @@ apiPrefix=api-order
 
 curl "http://localhost:${appPort}/${apiPrefix}/v3/api-docs" -s -o "/tmp/${apiPrefix}.json"
 
-fileName=demo-order-"$context"api-$(date +%Y%m%d)
+fileName=order-"$context"api-$(date +%Y%m%d)
 
 npx @redocly/cli build-docs "http://localhost:${appPort}/${apiPrefix}/v3/api-docs" -o "./$fileName.html"

@@ -4,7 +4,7 @@
 
 请改用：
 
-1. `demo-backend-service` 中 SpringController + SpringDoc 注解  
+1. 后端仓库中 API 接口 + SpringDoc 注解（位置按项目实际）  
 2. `generate-api-doc` skill 导出的 `docs/api-doc/*.html`  
 3. TECH-DESIGN §5 列表 + §7「后端原型契约」表  
 

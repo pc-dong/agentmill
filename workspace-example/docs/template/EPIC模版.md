@@ -34,7 +34,7 @@
 
 | 项 | 值 |
 |----|-----|
-| 前端仓库 | `demo-console-frontend` |
+| 前端仓库 | （按项目实际） |
 | 分支 | `feature/<卡号>-…` |
 | 主要 path | `src/...` |
 | 启动 | `npm run dev`（改已有菜单时 + auth-mock） |

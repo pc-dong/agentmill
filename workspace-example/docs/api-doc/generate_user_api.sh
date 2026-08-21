@@ -10,6 +10,6 @@ apiPrefix=api-user
 
 curl "http://localhost:${appPort}/${apiPrefix}/v3/api-docs" -s -o "/tmp/${apiPrefix}.json"
 
-fileName=demo-user-"$context"api-$(date +%Y%m%d)
+fileName=user-"$context"api-$(date +%Y%m%d)
 
 npx @redocly/cli build-docs "http://localhost:${appPort}/${apiPrefix}/v3/api-docs" -o "./$fileName.html"

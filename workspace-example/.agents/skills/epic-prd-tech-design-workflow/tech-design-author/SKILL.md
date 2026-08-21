@@ -4,7 +4,7 @@ description: >-
   Author Union Platform TECH-DESIGN.md (full) and TECH-DESIGN-delta-v*.md
   (iteration change views), plus tech/ artifacts (domain.puml, DDL, API list,
   sequences, frontend notes, OPEN closeout) for Phases 3–8. OpenAPI yaml is not
-  authored—API detail comes from optional backend-prototype (SpringController +
+  authored—API detail comes from optional backend-prototype (API 接口 + SpringDoc +
   generate-api-doc). Use when drafting TECH; or when epic-prd-tech-design-workflow
   routes here. Run tech-verification after domain/db/api/seq steps.
 ---
@@ -19,7 +19,7 @@ description: >-
 > 前置：Epic + PRD 已齐（或用户明确只要 TECH 骨架）
 
 **默认不写业务实现**；Phase 4/6 经人确认可跑 **backend-prototype**。  
-冲突裁定：全量 **TECH + `tech/`** > delta 摘要 > 臆测；§5 与 **SpringController / 生成 HTML** 冲突 → **以 Controller/HTML 为准**并回写列表。  
+冲突裁定：全量 **TECH + `tech/`** > delta 摘要 > 臆测；§5 与 **API 接口（+ SpringDoc）/ 生成 HTML** 冲突 → **以接口/HTML 为准**并回写列表。  
 **禁止**把 `tech/openapi/*.yaml` 当作权威契约（模版中该目录已废弃）。
 
 每个 Phase 结束执行 **doc-grilling D1**，再进下一 Phase。
@@ -59,7 +59,7 @@ description: >-
 
 1. 画/更新 `tech/domain.puml`
 2. TECH §3：设计决策、不变量、持久化边界；**增量字段写入 delta §2**
-3. **可选**：询问是否跑 **backend-prototype 领域段**（**仅**领域数据结构 + `port.in` UseCase 接口签名；禁止 Impl / 落库）→ 若是则 `Read` 并执行该 skill 段 A  
+3. **可选**：询问是否跑 **backend-prototype 领域段**（**仅**领域实体 + UseCase 接口签名；禁止 Impl / 落库）→ 若是则 `Read` 并执行该 skill 段 A  
 4. **跑 tech-verification → V-DOMAIN** → 补模型或 OPEN / B1  
 5. B1：聚合边界、外部依赖命名（UseCase 非 *Port，除非项目惯例）
 

@@ -11,7 +11,7 @@ description: >-
 
 > 在 Phase 4～7 各自结束后、以及 Phase 8 Ready 前执行。  
 > 缺口涉及决策时：`Read` [`../doc-grilling/SKILL.md`](../doc-grilling/SKILL.md)。  
-> API 权威：SpringController / generate-api-doc HTML（**不是** `tech/openapi/*.yaml`）。
+> API 权威：API 接口 + SpringDoc / generate-api-doc HTML（**不是** `tech/openapi/*.yaml`）。
 
 输出固定为：
 
@@ -73,7 +73,7 @@ description: >-
 
 ## V-API
 
-**通过标准**：需系统交互的 PRD 场景有 API 或显式「无 HTTP / 前端拼 URL / 复用他服务」；若已跑 backend-prototype 接口段，则 §5 path 能在 SpringController（或生成 HTML）找到，且主成功/主失败在 SpringDoc 有描述。
+**通过标准**：需系统交互的 PRD 场景有 API 或显式「无 HTTP / 前端拼 URL / 复用他服务」；若已跑 backend-prototype 接口段，则 §5 path 能在 API 接口（或生成 HTML）找到，且主成功/主失败在 SpringDoc 有描述。
 
 | 检查 | 方法 |
 |------|------|
@@ -101,7 +101,7 @@ description: >-
 | 参与者 | 经 `XxxUseCase`，非直写他域表 |
 | 角色命名 | 与 §8、PRD 一致 |
 | 异常分支 | 关键 4xx 有 alt 或注明见 Controller/HTML 错误示例 |
-| 与 V-API | path/command 能在 §5 或 SpringController 找到 |
+| 与 V-API | path/command 能在 §5 或 API 接口找到 |
 
 失败：补 `.puml`/§6 或问人。
 

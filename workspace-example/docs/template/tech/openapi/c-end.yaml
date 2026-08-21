@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: <Epic> C-end API — Tech T-xxx
   description: |
-    DEPRECATED: 勿再维护本文件。契约请用 SpringController + generate-api-doc HTML。
+    DEPRECATED: 勿再维护本文件。契约请用 API 接口 + SpringDoc / generate-api-doc HTML。
     C 端 / WMP 边界 OpenAPI 骨架（历史模版残留）。
     若本 Epic 无 C 端 API，可删除本文件并在 TECH-DESIGN.md 附件清单中移除。
   version: 0.1.0
