@@ -1,0 +1,81 @@
+openapi: 3.0.3
+info:
+  title: <Epic> C-end API — Tech T-xxx
+  description: |
+    DEPRECATED: 勿再维护本文件。契约请用 API 接口 + SpringDoc / generate-api-doc HTML。
+    C 端 / WMP 边界 OpenAPI 骨架（历史模版残留）。
+    若本 Epic 无 C 端 API，可删除本文件并在 TECH-DESIGN.md 附件清单中移除。
+  version: 0.1.0
+
+servers:
+  - url: /api
+    description: 相对网关前缀；按环境替换
+
+tags:
+  - name: ExampleCEnd
+    description: 示例 C 端资源；关联 P-xxx
+
+paths:
+  /public/example/{uuid}:
+    get:
+      tags: [ExampleCEnd]
+      operationId: getPublicExampleByUuid
+      summary: C 端示例详情
+      description: |
+        业务场景：C 端正式详情。
+        变更类型：新增。
+        关联 PRD：P-xxx。
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicExampleResponse"
+        "404":
+          description: 不存在或未发布
+
+  /public/example/{uuid}/preview:
+    get:
+      tags: [ExampleCEnd]
+      operationId: previewPublicExampleByUuid
+      summary: C 端示例预览
+      description: |
+        业务场景：预览（不限制发布状态）。
+        变更类型：新增。
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicExampleResponse"
+
+components:
+  schemas:
+    PublicExampleResponse:
+      type: object
+      required: [uuid, preview]
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        preview:
+          type: boolean
+        runtimeStatus:
+          type: string
+          enum: [SCHEDULED, RUNNING, EXPIRED]

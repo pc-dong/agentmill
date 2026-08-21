@@ -1,0 +1,8 @@
+# The `dsh-prd-workflow` bundle layer: one installer entry that copies the
+# bundled preset (agent.cordis.yml + preset.yml + skills/ tree, including the
+# init-prd-docs scaffold skill carrying docs/template) into the user preset
+# root on boot, so the `prd-workflow` preset becomes selectable for new
+# sessions.
+- insert:
+    - id: prd-workflow-installer
+      name: dsh-prd-workflow

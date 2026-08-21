@@ -1,0 +1,33 @@
+{
+  "name": "dsh-prd-workflow",
+  "version": "0.1.0",
+  "description": "DSH preset plugin bundling the workspace-example skill set: Epic/PRD/TECH 文档工作流、grilling、api-doc 导出与 superpowers 开发技能，附带 docs/template 模版播种（init-prd-docs）。基于 DSH 标准模式。",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "preset/",
+    "skills-lock.json",
+    "README.md",
+    "NOTICE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "agent-preset",
+    "preset",
+    "prd-workflow",
+    "skills"
+  ]
+}

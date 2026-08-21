@@ -1,0 +1,56 @@
+openapi: 3.0.3
+info:
+  title: <Epic> Console API — Tech T-xxx
+  description: |
+    DEPRECATED: 勿再维护本文件。契约请用 API 接口 + SpringDoc / generate-api-doc HTML。
+    Console / Backoffice 边界 OpenAPI 骨架（历史模版残留）。
+    关联 Epic：E-xxx；覆盖 PRD 见 TECH-DESIGN.md。
+    业务规则以 PRD + shared-context 为准。
+  version: 0.1.0
+
+servers:
+  - url: /api
+    description: 相对网关前缀；按环境替换
+
+tags:
+  - name: Example
+    description: 示例资源；关联 P-xxx
+
+paths:
+  /example/{uuid}:
+    get:
+      tags: [Example]
+      operationId: getExampleByUuid
+      summary: 示例查询
+      description: |
+        业务场景：示例。
+        变更类型：新增。
+        关联 PRD：P-xxx。
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExampleResponse"
+        "404":
+          description: 不存在或不可见
+
+components:
+  schemas:
+    ExampleResponse:
+      type: object
+      required: [uuid]
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string

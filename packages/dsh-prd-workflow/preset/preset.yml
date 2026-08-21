@@ -1,0 +1,2 @@
+name: PRD 工作流模式
+description: 基于标准模式，启用 workspace-example 技能集：Epic/PRD/TECH 文档工作流（epic-prd-tech-design-workflow 全家桶）、grilling 追问、generate-api-doc 导出与 superpowers 开发技能；工作区缺少 docs/template 时先由 init-prd-docs 播种模版。

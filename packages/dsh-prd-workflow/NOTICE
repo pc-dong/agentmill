@@ -1,0 +1,9 @@
+This package redistributes skill content originating from
+https://github.com/obra/superpowers (14 skills listed in skills-lock.json,
+with their recorded source paths and hashes) together with locally authored
+skills (epic-prd-tech-design-workflow and its nested sub-skills,
+generate-api-doc, grilling) and the docs scaffold (README-PRD体系.md,
+docs/template/, docs/api-doc/) from the workspace-example directory of this
+repository. The preset composition is derived from the shipped `standard`
+agent preset of @deepseek-ai/dsh. Respect upstream licenses when
+redistributing.
